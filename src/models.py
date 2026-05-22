@@ -3,9 +3,34 @@ import torch.nn as nn
 from transformers import AutoModel, BitsAndBytesConfig
 
 try:
-    from torchcrf import CRF          # pytorch-crf
+    from torchcrf import CRF as _BaseCRF
+    _BATCH_FIRST = True
 except ModuleNotFoundError:
-    from TorchCRF import CRF          # TorchCRF
+    from TorchCRF import CRF as _BaseCRF
+    _BATCH_FIRST = False
+
+
+class CRF(nn.Module):
+    """Thin adapter: always exposes a batch-first interface regardless of backend."""
+
+    def __init__(self, num_tags: int):
+        super().__init__()
+        self._crf = _BaseCRF(num_tags, batch_first=True) if _BATCH_FIRST else _BaseCRF(num_tags)
+
+    def forward(self, emissions, labels, mask):
+        if _BATCH_FIRST:
+            return self._crf(emissions, labels, mask=mask, reduction="mean")
+        return self._crf(
+            emissions.transpose(0, 1),
+            labels.transpose(0, 1),
+            mask=mask.transpose(0, 1),
+            reduction="mean",
+        )
+
+    def decode(self, emissions, mask):
+        if _BATCH_FIRST:
+            return self._crf.decode(emissions, mask=mask)
+        return self._crf.decode(emissions.transpose(0, 1), mask=mask.transpose(0, 1))
 
 
 class BertNER(nn.Module):
@@ -84,7 +109,7 @@ class SciBertCRF(nn.Module):
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
         self.classifier = nn.Linear(hidden, num_labels)
-        self.crf = CRF(num_labels, batch_first=True)
+        self.crf = CRF(num_labels)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
@@ -94,7 +119,7 @@ class SciBertCRF(nn.Module):
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
-            loss = -self.crf(emissions, safe_labels, mask=mask, reduction="mean")
+            loss = -self.crf(emissions, safe_labels, mask=mask)
             return loss, emissions
 
         tag_seqs = self.crf.decode(emissions, mask=mask)
@@ -122,7 +147,7 @@ class SciBertMLPCRF(nn.Module):
             nn.GELU(),
             nn.Linear(256, num_labels),
         )
-        self.crf = CRF(num_labels, batch_first=True)
+        self.crf = CRF(num_labels)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
@@ -132,7 +157,7 @@ class SciBertMLPCRF(nn.Module):
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
-            loss = -self.crf(emissions, safe_labels, mask=mask, reduction="mean")
+            loss = -self.crf(emissions, safe_labels, mask=mask)
             return loss, emissions
 
         tag_seqs = self.crf.decode(emissions, mask=mask)
