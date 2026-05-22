@@ -27,7 +27,8 @@ class CRF(nn.Module):
                 labels.transpose(0, 1),
                 mask=mask.transpose(0, 1),
             )
-        return log_likelihood / emissions.size(0)
+        ll = log_likelihood if log_likelihood.dim() == 0 else log_likelihood.mean()
+        return ll
 
     def decode(self, emissions, mask):
         if _BATCH_FIRST:
