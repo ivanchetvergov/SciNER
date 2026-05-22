@@ -18,14 +18,16 @@ class CRF(nn.Module):
         self._crf = _BaseCRF(num_tags, batch_first=True) if _BATCH_FIRST else _BaseCRF(num_tags)
 
     def forward(self, emissions, labels, mask):
+        # Neither backend guarantees a `reduction` kwarg — normalize manually.
         if _BATCH_FIRST:
-            return self._crf(emissions, labels, mask=mask, reduction="mean")
-        return self._crf(
-            emissions.transpose(0, 1),
-            labels.transpose(0, 1),
-            mask=mask.transpose(0, 1),
-            reduction="mean",
-        )
+            log_likelihood = self._crf(emissions, labels, mask=mask)
+        else:
+            log_likelihood = self._crf(
+                emissions.transpose(0, 1),
+                labels.transpose(0, 1),
+                mask=mask.transpose(0, 1),
+            )
+        return log_likelihood / emissions.size(0)
 
     def decode(self, emissions, mask):
         if _BATCH_FIRST:
