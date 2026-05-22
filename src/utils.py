@@ -90,3 +90,15 @@ def save_results(results: dict, path: str | Path):
 def load_results(path: str | Path) -> dict:
     with open(path) as f:
         return json.load(f)
+
+
+def save_checkpoint(model, path: str | Path):
+    import torch
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), path)
+
+
+def load_checkpoint(model, path: str | Path):
+    import torch
+    model.load_state_dict(torch.load(path, map_location="cpu"))
+    return model
