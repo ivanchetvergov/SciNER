@@ -11,6 +11,7 @@ import json
 import shutil
 import tarfile
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -21,7 +22,7 @@ from src.config import EXPERIMENTS, ExperimentConfig
 from src.data import build_datasets, ID2LABEL, NUM_LABELS, ENTITY_TYPES
 from src.models import build_model
 from src.train import train_model, evaluate
-from src.utils import set_seed, save_results
+from src.utils import set_seed, save_results, append_registry, append_history
 
 
 # ── paths ──────────────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ def ensure_data():
 
 
 # ── single experiment ──────────────────────────────────────────────────────────
-def run_experiment(cfg: ExperimentConfig, device: torch.device) -> dict:
+def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> dict:
     print(f"\n{'='*60}\n  {cfg.model_name}  |  {cfg.base_model}\n{'='*60}")
     set_seed(cfg.seed)
 
@@ -79,14 +80,19 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device) -> dict:
     print(f"[ckpt] saved → {ckpt_path}  ({ckpt_path.stat().st_size / 1e6:.0f} MB)")
 
     test_metrics = evaluate(model, test_loader, device, ID2LABEL)
+    results_file = f"{cfg.model_name}_{run_id}.json"
     result = {
+        "run_id":       run_id,
         "model_name":   cfg.model_name,
         "base_model":   cfg.base_model,
         "config":       cfg.__dict__,
         "history":      history,
         "test_metrics": test_metrics,
+        "results_file": results_file,
     }
-    save_results(result, RESULTS_DIR / f"{cfg.model_name}.json")
+    save_results(result, RESULTS_DIR / results_file)
+    append_registry(result, RESULTS_DIR / "registry.csv")
+    append_history(result,   RESULTS_DIR / "history.csv")
 
     print(f"\n[test] macro F1: {test_metrics['macro_f1']:.4f}")
     for et in ENTITY_TYPES:
@@ -162,9 +168,12 @@ def main():
             patched.append(cfg)
         experiments = patched
 
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    print(f"[run_id] {run_id}")
+
     all_results = []
     for cfg in experiments:
-        result = run_experiment(cfg, device)
+        result = run_experiment(cfg, device, run_id)
         all_results.append(result)
 
     print_summary(all_results)

@@ -1,3 +1,4 @@
+import csv
 import json
 import random
 from pathlib import Path
@@ -6,6 +7,18 @@ import numpy as np
 import torch
 from seqeval.metrics import classification_report as seqeval_report
 from seqeval.metrics import f1_score
+
+ENTITY_TYPES = ["Generic", "Material", "Method", "Metric", "OtherScientificTerm", "Task"]
+
+_REGISTRY_COLS = [
+    "run_id", "model_name", "base_model",
+    "num_epochs", "batch_size", "lr", "seed",
+    "macro_f1",
+    *[f"{e}_f1" for e in ENTITY_TYPES],
+    "results_file",
+]
+
+_HISTORY_COLS = ["run_id", "model_name", "epoch", "train_loss", "dev_macro_f1"]
 
 
 def set_seed(seed: int = 42):
@@ -79,6 +92,49 @@ def compute_metrics(
             metrics[f"{etype}_f1"] = 0.0
 
     return metrics
+
+
+def append_registry(result: dict, registry_path: str | Path) -> None:
+    """Append one experiment result as a row in registry.csv."""
+    path = Path(registry_path)
+    write_header = not path.exists()
+    m = result["test_metrics"]
+    cfg = result["config"]
+    row = {
+        "run_id":       result["run_id"],
+        "model_name":   result["model_name"],
+        "base_model":   result["base_model"],
+        "num_epochs":   cfg.get("num_epochs"),
+        "batch_size":   cfg.get("batch_size"),
+        "lr":           cfg.get("lr"),
+        "seed":         cfg.get("seed"),
+        "macro_f1":     round(m["macro_f1"], 4),
+        **{f"{e}_f1": round(m.get(f"{e}_f1", 0), 4) for e in ENTITY_TYPES},
+        "results_file": result.get("results_file", ""),
+    }
+    with open(path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=_REGISTRY_COLS)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def append_history(result: dict, history_path: str | Path) -> None:
+    """Append per-epoch training history rows to history.csv."""
+    path = Path(history_path)
+    write_header = not path.exists()
+    with open(path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=_HISTORY_COLS)
+        if write_header:
+            writer.writeheader()
+        for h in result["history"]:
+            writer.writerow({
+                "run_id":       result["run_id"],
+                "model_name":   result["model_name"],
+                "epoch":        h["epoch"],
+                "train_loss":   round(h["train_loss"], 4),
+                "dev_macro_f1": round(h["dev_macro_f1"], 4),
+            })
 
 
 def save_results(results: dict, path: str | Path):
