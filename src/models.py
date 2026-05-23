@@ -1,39 +1,7 @@
 import torch
 import torch.nn as nn
+from torchcrf import CRF
 from transformers import AutoModel, BitsAndBytesConfig
-
-try:
-    from torchcrf import CRF as _BaseCRF
-    _BATCH_FIRST = True
-except ModuleNotFoundError:
-    from TorchCRF import CRF as _BaseCRF
-    _BATCH_FIRST = False
-
-
-class CRF(nn.Module):
-    """Thin adapter: always exposes a batch-first interface regardless of backend."""
-
-    def __init__(self, num_tags: int):
-        super().__init__()
-        self._crf = _BaseCRF(num_tags, batch_first=True) if _BATCH_FIRST else _BaseCRF(num_tags)
-
-    def forward(self, emissions, labels, mask):
-        # Neither backend guarantees a `reduction` kwarg — normalize manually.
-        if _BATCH_FIRST:
-            log_likelihood = self._crf(emissions, labels, mask=mask)
-        else:
-            log_likelihood = self._crf(
-                emissions.transpose(0, 1),
-                labels.transpose(0, 1),
-                mask=mask.transpose(0, 1),
-            )
-        ll = log_likelihood if log_likelihood.dim() == 0 else log_likelihood.mean()
-        return ll
-
-    def decode(self, emissions, mask):
-        if _BATCH_FIRST:
-            return self._crf.decode(emissions, mask=mask)
-        return self._crf.decode(emissions.transpose(0, 1), mask=mask.transpose(0, 1))
 
 
 class BertNER(nn.Module):
@@ -91,52 +59,29 @@ class SciBertMLP(nn.Module):
         return loss, logits
 
 
-def _crf_loss_and_decode(crf: CRF, emissions, labels, attention_mask, training: bool):
-    """Shared CRF forward logic. Returns (loss_or_None, tag_sequences)."""
-    mask = attention_mask.bool()
-
-    if training and labels is not None:
-        # Replace -100 with 0 so CRF doesn't crash; masked positions are ignored
-        safe_labels = labels.clone()
-        safe_labels[safe_labels == -100] = 0
-        loss = -crf(emissions, safe_labels, mask=mask, reduction="mean")
-        return loss, None
-
-    tag_seqs = crf.decode(emissions, mask=mask)
-    return None, tag_seqs
-
-
 class SciBertCRF(nn.Module):
     def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased"):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
         self.classifier = nn.Linear(hidden, num_labels)
-        self.crf = CRF(num_labels)
+        self.crf = CRF(num_labels, batch_first=True)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        emissions = self.classifier(outputs.last_hidden_state)
-        mask = attention_mask.bool()
-
+        emissions = self.classifier(
+            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        )
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
-            loss = -self.crf(emissions, safe_labels, mask=mask)
+            loss = -self.crf(emissions, safe_labels, mask=attention_mask.bool(), reduction="mean")
             return loss, emissions
-
-        tag_seqs = self.crf.decode(emissions, mask=mask)
-        # Pad decoded sequences back to (B, T) for uniform interface
-        B, T = emissions.shape[:2]
-        logits = torch.zeros(B, T, emissions.size(-1), device=emissions.device)
-        for i, tags in enumerate(tag_seqs):
-            for j, tag in enumerate(tags):
-                logits[i, j, tag] = 1.0
-        return None, logits
+        return None, emissions
 
     def decode(self, input_ids, attention_mask):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        emissions = self.classifier(outputs.last_hidden_state)
+        emissions = self.classifier(
+            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        )
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 
@@ -150,30 +95,23 @@ class SciBertMLPCRF(nn.Module):
             nn.GELU(),
             nn.Linear(256, num_labels),
         )
-        self.crf = CRF(num_labels)
+        self.crf = CRF(num_labels, batch_first=True)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        emissions = self.mlp(outputs.last_hidden_state)
-        mask = attention_mask.bool()
-
+        emissions = self.mlp(
+            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        )
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
-            loss = -self.crf(emissions, safe_labels, mask=mask)
+            loss = -self.crf(emissions, safe_labels, mask=attention_mask.bool(), reduction="mean")
             return loss, emissions
-
-        tag_seqs = self.crf.decode(emissions, mask=mask)
-        B, T = emissions.shape[:2]
-        logits = torch.zeros(B, T, emissions.size(-1), device=emissions.device)
-        for i, tags in enumerate(tag_seqs):
-            for j, tag in enumerate(tags):
-                logits[i, j, tag] = 1.0
-        return None, logits
+        return None, emissions
 
     def decode(self, input_ids, attention_mask):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        emissions = self.mlp(outputs.last_hidden_state)
+        emissions = self.mlp(
+            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        )
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 
@@ -189,7 +127,6 @@ class DeBertaQLoRA(nn.Module):
             bnb_4bit_compute_dtype=torch.float16,
         )
         base = AutoModel.from_pretrained(base_model, quantization_config=bnb_config)
-
         lora_config = LoraConfig(
             task_type=TaskType.FEATURE_EXTRACTION,
             r=lora_rank,
@@ -199,13 +136,13 @@ class DeBertaQLoRA(nn.Module):
             bias="none",
         )
         self.encoder = get_peft_model(base, lora_config)
-        hidden = base.config.hidden_size
-        self.classifier = nn.Linear(hidden, num_labels)
+        self.classifier = nn.Linear(base.config.hidden_size, num_labels)
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        logits = self.classifier(outputs.last_hidden_state.float())
+        logits = self.classifier(
+            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.float()
+        )
         loss = None
         if labels is not None:
             loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
