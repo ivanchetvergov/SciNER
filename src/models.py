@@ -74,7 +74,8 @@ class SciBertCRF(nn.Module):
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
-            loss = -self.crf(emissions, safe_labels, mask=attention_mask.bool(), reduction="mean")
+            mask = attention_mask.bool()
+            loss = -self.crf(emissions, safe_labels, mask=mask, reduction="sum") / mask.sum()
             return loss, emissions
         return None, emissions
 
@@ -104,7 +105,8 @@ class SciBertMLPCRF(nn.Module):
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
-            loss = -self.crf(emissions, safe_labels, mask=attention_mask.bool(), reduction="mean")
+            mask = attention_mask.bool()
+            loss = -self.crf(emissions, safe_labels, mask=mask, reduction="sum") / mask.sum()
             return loss, emissions
         return None, emissions
 
