@@ -140,9 +140,8 @@ class DeBertaQLoRA(nn.Module):
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        logits = self.classifier(
-            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.float()
-        )
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.float()
+        logits = self.classifier.to(hidden.device)(hidden)
         loss = None
         if labels is not None:
             loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
