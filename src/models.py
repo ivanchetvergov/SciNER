@@ -11,12 +11,13 @@ class BertNER(nn.Module):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
+        self.dropout = nn.Dropout(self.encoder.config.hidden_dropout_prob)
         self.classifier = nn.Linear(hidden, num_labels)
         self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        logits = self.classifier(outputs.last_hidden_state)
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        logits = self.classifier(self.dropout(hidden))
         loss = None
         if labels is not None:
             w = self.class_weights.to(logits.device) if self.class_weights is not None else None
@@ -31,12 +32,13 @@ class SciBertNER(nn.Module):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
+        self.dropout = nn.Dropout(self.encoder.config.hidden_dropout_prob)
         self.classifier = nn.Linear(hidden, num_labels)
         self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        logits = self.classifier(outputs.last_hidden_state)
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        logits = self.classifier(self.dropout(hidden))
         loss = None
         if labels is not None:
             w = self.class_weights.to(logits.device) if self.class_weights is not None else None
@@ -51,6 +53,7 @@ class SciBertMLP(nn.Module):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
+        self.dropout = nn.Dropout(self.encoder.config.hidden_dropout_prob)
         self.mlp = nn.Sequential(
             nn.Linear(hidden, 256),
             nn.GELU(),
@@ -59,8 +62,8 @@ class SciBertMLP(nn.Module):
         self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        logits = self.mlp(outputs.last_hidden_state)
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        logits = self.mlp(self.dropout(hidden))
         loss = None
         if labels is not None:
             w = self.class_weights.to(logits.device) if self.class_weights is not None else None
@@ -75,14 +78,14 @@ class SciBertCRF(nn.Module):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
+        self.dropout = nn.Dropout(self.encoder.config.hidden_dropout_prob)
         self.classifier = nn.Linear(hidden, num_labels)
         self.crf = CRF(num_labels, batch_first=True)
         self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        emissions = self.classifier(
-            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        ).float()
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        emissions = self.classifier(self.dropout(hidden)).float()
         if self.class_weights is not None:
             emissions = emissions * self.class_weights.to(emissions.device)
         if labels is not None:
@@ -94,9 +97,8 @@ class SciBertCRF(nn.Module):
         return None, emissions
 
     def decode(self, input_ids, attention_mask):
-        emissions = self.classifier(
-            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        ).float()
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        emissions = self.classifier(self.dropout(hidden)).float()
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 
@@ -105,6 +107,7 @@ class SciBertMLPCRF(nn.Module):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
+        self.dropout = nn.Dropout(self.encoder.config.hidden_dropout_prob)
         self.mlp = nn.Sequential(
             nn.Linear(hidden, 256),
             nn.GELU(),
@@ -113,9 +116,8 @@ class SciBertMLPCRF(nn.Module):
         self.crf = CRF(num_labels, batch_first=True)
 
     def forward(self, input_ids, attention_mask, labels=None):
-        emissions = self.mlp(
-            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        ).float()
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        emissions = self.mlp(self.dropout(hidden)).float()
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
@@ -125,9 +127,8 @@ class SciBertMLPCRF(nn.Module):
         return None, emissions
 
     def decode(self, input_ids, attention_mask):
-        emissions = self.mlp(
-            self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        ).float()
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        emissions = self.mlp(self.dropout(hidden)).float()
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 
@@ -139,6 +140,7 @@ class SciBertConcat4(nn.Module):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
+        self.dropout = nn.Dropout(self.encoder.config.hidden_dropout_prob)
         self.classifier = nn.Linear(hidden * 4, num_labels)
         self.register_buffer("class_weights", class_weights)
 
@@ -152,7 +154,7 @@ class SciBertConcat4(nn.Module):
         self._captured.clear()
         self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         last_4 = torch.cat(self._captured, dim=-1)
-        logits = self.classifier(last_4)
+        logits = self.classifier(self.dropout(last_4))
         loss = None
         if labels is not None:
             w = self.class_weights.to(logits.device) if self.class_weights is not None else None
@@ -184,12 +186,13 @@ class DeBertaQLoRA(nn.Module):
             bias="none",
         )
         self.encoder = get_peft_model(base, lora_config)
+        self.dropout = nn.Dropout(0.1)
         self.classifier = nn.Linear(base.config.hidden_size, num_labels)
         self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
         hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.float()
-        logits = self.classifier.to(hidden.device)(hidden)
+        logits = self.classifier.to(hidden.device)(self.dropout(hidden))
         loss = None
         if labels is not None:
             w = self.class_weights.to(logits.device) if self.class_weights is not None else None
