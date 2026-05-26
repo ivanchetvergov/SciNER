@@ -1,7 +1,5 @@
-results/
 checkpoints/
 data/
-plots/
 .claude/
 
 *.pt
@@ -13,3 +11,5 @@ plots/
 __pycache__/
 *.pyc
 .DS_Store
+
+report/build/
