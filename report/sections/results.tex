@@ -1,0 +1,92 @@
+\section{Результаты}
+
+\subsection{Эксперимент 1 --- базовый препроцессинг}
+
+Результаты всех моделей на тестовой выборке приведены в таблице~\ref{tab:results_v1}.
+
+\begin{table}[h]
+\centering
+\caption{Macro F1 и per-entity F1 на тесте (эксперимент 1)}
+\label{tab:results_v1}
+\small
+\begin{tabular}{lrrrrrrr}
+\hline
+\textbf{Модель} & \textbf{Macro} & \textbf{Gen.} & \textbf{Mat.} & \textbf{Met.} & \textbf{Metr.} & \textbf{OST} & \textbf{Task} \\
+\hline
+bert\_linear\_noweight        & 0.604 & 0.714 & 0.557 & 0.681 & 0.573 & 0.531 & 0.565 \\
+bert\_linear                  & 0.594 & 0.656 & 0.568 & 0.676 & 0.593 & 0.523 & 0.546 \\
+roberta\_linear\_noweight     & 0.591 & 0.692 & 0.561 & 0.671 & 0.548 & 0.519 & 0.556 \\
+roberta\_linear               & 0.585 & 0.673 & 0.557 & 0.651 & 0.593 & 0.531 & 0.505 \\
+scibert\_linear\_noweight     & \textbf{0.646} & 0.712 & 0.659 & 0.749 & 0.618 & 0.566 & 0.571 \\
+scibert\_linear               & 0.603 & 0.688 & 0.615 & 0.725 & 0.533 & 0.545 & 0.515 \\
+scibert\_mlp                  & 0.644 & 0.708 & 0.665 & 0.746 & 0.615 & 0.577 & 0.553 \\
+scibert\_linear\_crf\_noweight& 0.628 & 0.721 & 0.628 & 0.723 & 0.543 & 0.570 & 0.581 \\
+scibert\_linear\_crf          & 0.628 & 0.721 & 0.628 & 0.723 & 0.543 & 0.570 & 0.581 \\
+scibert\_concat4              & 0.644 & 0.737 & 0.661 & 0.751 & 0.573 & 0.579 & 0.561 \\
+\hline
+\end{tabular}
+\end{table}
+
+\noindent Gen.~= Generic, Mat.~= Material, Met.~= Method, Metr.~= Metric, OST~= OtherScientificTerm.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{../plots/v1/macro_f1_comparison.png}
+    \caption{Macro F1 по моделям (эксперимент 1)}
+    \label{fig:macro_f1_v1}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{../plots/v1/entity_f1_heatmap.png}
+    \caption{Тепловая карта per-entity F1 (эксперимент 1)}
+    \label{fig:heatmap_v1}
+\end{figure}
+
+\subsubsection{Влияние взвешивания классов}
+
+Во всех случаях вариант без весов превосходит взвешенный: \texttt{scibert\_linear\_noweight} (0.646) против \texttt{scibert\_linear} (0.603), аналогично для BERT и RoBERTa. Вероятная причина: взвешивание избыточно штрафует класс \texttt{O} и вынуждает модель «видеть» сущности там, где их нет, снижая точность.
+
+\subsubsection{Влияние научного предобучения}
+
+SciBERT-модели стабильно превосходят BERT и RoBERTa. Лучший BERT (\texttt{bert\_linear\_noweight}, 0.604) уступает лучшему SciBERT (\texttt{scibert\_linear\_noweight}, 0.646) на 4.2 п.п. --- ожидаемый результат: специализированное предобучение важно для научного домена.
+
+\subsubsection{Влияние архитектуры головы}
+
+MLP и Concat-4 незначительно уступают простой линейной голове без весов (0.644 vs 0.646). CRF не даёт прироста: 0.628, что ниже лучшего SciBERT-baseline. Возможная причина --- CRF усложняет оптимизацию без существенной структурной выгоды при коротких и несложных span'ах научных сущностей.
+
+\subsection{Кривые обучения}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{../plots/v1/learning_curves.png}
+    \caption{Кривые обучения по эпохам (эксперимент 1)}
+    \label{fig:curves_v1}
+\end{figure}
+
+SciBERT-модели сходятся быстрее и стабильнее BERT/RoBERTa. RoBERTa демонстрирует заметную нестабильность на первых эпохах.
+
+\subsection{Анализ ошибок}
+
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../plots/v1/conf_mtx/scibert_linear_noweight.png}
+        \caption{scibert\_linear\_noweight}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../plots/v1/conf_mtx/scibert_concat4.png}
+        \caption{scibert\_concat4}
+    \end{subfigure}
+    \caption{Матрицы ошибок лучших моделей (нормировано по строкам)}
+    \label{fig:conf_mtx_v1}
+\end{figure}
+
+Матрицы ошибок показывают (рис.~\ref{fig:conf_mtx_v1}): основная проблема --- пропуски (столбец «Missed»), а не путаница между типами. Чаще всего пропускаются Metric и Task --- редкие классы. Путаница между типами сосредоточена на парах Generic↔Method и Generic↔OtherScientificTerm, что семантически объяснимо.
+
+\subsection{Эксперимент 2 --- улучшенный препроцессинг}
+
+% TODO: вставить результаты v2 после завершения обучения
+
+\textit{Результаты эксперимента 2 (с аугментацией и межпредложенческим контекстом) будут добавлены после завершения обучения.}

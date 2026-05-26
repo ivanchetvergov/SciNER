@@ -1,0 +1,44 @@
+\section{Данные}
+
+\subsection{Датасет SciERC}
+
+SciERC~\cite{luan2018scierc} --- корпус научных абстрактов из 12 конференций по ИИ (ACL, EMNLP, NeurIPS и др.). Датасет содержит 500 документов, размеченных на уровне именованных сущностей, отношений и кореференций. В данной работе используется только задача NER.
+
+Стандартное разбиение: 350 документов в обучающей выборке, 50 в валидационной, 100 в тестовой.
+
+\subsection{Типы сущностей}
+
+Датасет определяет 6 типов именованных сущностей (таблица~\ref{tab:entity_types}).
+
+\begin{table}[h]
+\centering
+\caption{Типы сущностей в SciERC}
+\label{tab:entity_types}
+\begin{tabular}{lll}
+\hline
+\textbf{Тип} & \textbf{Описание} & \textbf{Пример} \\
+\hline
+Task               & Задача или проблема              & \textit{machine translation} \\
+Method             & Метод, модель, система           & \textit{BERT, attention mechanism} \\
+Metric             & Метрика оценки                   & \textit{F1 score, BLEU} \\
+Material           & Датасет, ресурс, материал        & \textit{Penn Treebank, ImageNet} \\
+OtherScientificTerm & Прочий научный термин           & \textit{feature, embedding} \\
+Generic            & Общий термин, сложно категоризировать & \textit{approach, model} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{BIO-разметка}
+
+Сущности кодируются в формате BIO (Beginning--Inside--Outside):
+\begin{itemize}
+    \item \texttt{B-X} --- первый токен сущности типа X,
+    \item \texttt{I-X} --- продолжение сущности типа X,
+    \item \texttt{O} --- токен вне именованной сущности.
+\end{itemize}
+
+Итого 13 меток: \texttt{O} плюс \texttt{B-}/\texttt{I-} для каждого из 6 типов. Классы существенно несбалансированы: метка \texttt{O} составляет большинство токенов, а такие типы, как Metric и Task, встречаются значительно реже остальных.
+
+\subsection{Статистика}
+
+Дисбаланс классов --- ключевая особенность датасета, влияющая на выбор функции потерь. В разделе~\ref{sec:experiments} описано, как это учитывается при обучении.

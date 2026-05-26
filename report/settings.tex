@@ -1,0 +1,89 @@
+\usepackage{fontspec}
+\usepackage[main=russian, english]{babel}
+
+\IfFontExistsTF{CMU Serif}{
+    \setmainfont{CMU Serif}
+}{\IfFontExistsTF{PT Serif}{
+    \setmainfont{PT Serif}
+}{
+    \setmainfont{Times New Roman}
+}}
+\IfFontExistsTF{CMU Sans Serif}{
+    \setsansfont{CMU Sans Serif}
+}{\IfFontExistsTF{PT Sans}{
+    \setsansfont{PT Sans}
+}{
+    \setsansfont{Arial}
+}}
+\IfFontExistsTF{CMU Typewriter Text}{
+    \setmonofont{CMU Typewriter Text}
+}{\IfFontExistsTF{PT Mono}{
+    \setmonofont{PT Mono}
+}{
+    \setmonofont{Courier New}
+}}
+
+\usepackage[14pt]{extsizes}
+\linespread{0.98}
+
+\usepackage[left=20mm, right=20mm, top=20mm, bottom=20mm, footskip=10mm]{geometry}
+
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=[HTML]{0000EE},
+    urlcolor=[HTML]{0000EE},
+    citecolor=[HTML]{0000EE},
+}
+
+\usepackage{listings}
+\usepackage{xcolor}
+\definecolor{codegray}{rgb}{0.97, 0.97, 0.97}
+\definecolor{codegreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{codepurple}{rgb}{0.5, 0.0, 0.5}
+
+\lstdefinestyle{common}{
+    backgroundcolor=\color{codegray},
+    basicstyle=\ttfamily\small,
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue}\bfseries,
+    stringstyle=\color{codepurple},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=6pt,
+    breaklines=true,
+    frame=single,
+    framesep=3pt,
+    tabsize=4,
+    showstringspaces=false,
+    literate=
+        {а}{{\cyra}}1 {б}{{\cyrb}}1 {в}{{\cyrv}}1 {г}{{\cyrg}}1
+        {д}{{\cyrd}}1 {е}{{\cyre}}1 {ё}{{\cyryo}}1 {ж}{{\cyrzh}}1
+        {з}{{\cyrz}}1 {и}{{\cyri}}1 {й}{{\cyrshti}}1 {к}{{\cyrk}}1
+        {л}{{\cyrl}}1 {м}{{\cyrm}}1 {н}{{\cyrn}}1 {о}{{\cyro}}1
+        {п}{{\cyrp}}1 {р}{{\cyrr}}1 {с}{{\cyrs}}1 {т}{{\cyrt}}1
+        {у}{{\cyru}}1 {ф}{{\cyrf}}1 {х}{{\cyrh}}1 {ц}{{\cyrc}}1
+        {ч}{{\cyrch}}1 {ш}{{\cyrsh}}1 {щ}{{\cyrshch}}1 {ъ}{{\cyrhrdsn}}1
+        {ы}{{\cyrery}}1 {ь}{{\cyrsftsn}}1 {э}{{\cyrerev}}1 {ю}{{\cyryu}}1
+        {я}{{\cyrya}}1
+        {А}{{\CYRA}}1 {Б}{{\CYRB}}1 {В}{{\CYRV}}1 {Г}{{\CYRG}}1
+        {Д}{{\CYRD}}1 {Е}{{\CYRE}}1 {Ж}{{\CYRZH}}1 {З}{{\CYRZ}}1
+        {И}{{\CYRI}}1 {К}{{\CYRK}}1 {Л}{{\CYRL}}1 {М}{{\CYRM}}1
+        {Н}{{\CYRN}}1 {О}{{\CYRO}}1 {П}{{\CYRP}}1 {Р}{{\CYRR}}1
+        {С}{{\CYRS}}1 {Т}{{\CYRT}}1 {У}{{\CYRU}}1 {Ф}{{\CYRF}}1
+        {Х}{{\CYRH}}1 {Ц}{{\CYRC}}1 {Ч}{{\CYRCH}}1 {Ш}{{\CYRSH}}1
+        {Щ}{{\CYRSHCH}}1 {Э}{{\CYREREV}}1 {Ю}{{\CYRYU}}1 {Я}{{\CYRYA}}1,
+}
+\lstdefinestyle{pythonstyle}{
+    style=common,
+    language=Python,
+}
+
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
