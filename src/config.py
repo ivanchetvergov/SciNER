@@ -17,6 +17,7 @@ class ExperimentConfig:
     lora_alpha: int = 32
     grad_accum_steps: int = 1
     use_class_weights: bool = True
+    no_data_parallel: bool = False
 
 
 EXPERIMENTS = [
@@ -52,6 +53,7 @@ EXPERIMENTS = [
         num_epochs=10,
         early_stopping_patience=3,
         batch_size=8,
+        no_data_parallel=True,
     ),
     ExperimentConfig(
         model_name="deberta_qlora",

@@ -73,7 +73,7 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
                         class_weights=class_weights)
     if not cfg.use_qlora:
         model = model.to(device)
-        if torch.cuda.device_count() > 1:
+        if torch.cuda.device_count() > 1 and not cfg.no_data_parallel:
             model = torch.nn.DataParallel(model)
             print(f"[gpu] using {torch.cuda.device_count()} GPUs")
 
