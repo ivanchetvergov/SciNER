@@ -144,4 +144,5 @@ def compute_class_weights(dataset: NERDataset, num_labels: int) -> torch.Tensor:
             if l.item() != -100:
                 counts[l.item()] += 1
     total = counts.sum()
-    return total / (num_labels * counts.clamp(min=1))
+    weights = total / (num_labels * counts.clamp(min=1))
+    return weights.sqrt()  # soften: linear weighting is too aggressive for O-heavy NER
