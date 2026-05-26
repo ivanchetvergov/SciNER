@@ -58,7 +58,8 @@ def evaluate(
         labels         = batch["labels"].to(device)
 
         if use_crf:
-            tag_seqs = model.decode(input_ids, attention_mask)
+            decode = model.module.decode if isinstance(model, torch.nn.DataParallel) else model.decode
+            tag_seqs = decode(input_ids, attention_mask)
             for tags, label_seq, mask_seq in zip(tag_seqs, labels, attention_mask):
                 pred_tags, true_tags = [], []
                 tag_idx = 0
@@ -133,7 +134,8 @@ def train_model(
             best_f1 = dev_f1
             no_improve = 0
             if not quantized:
-                best_state = copy.deepcopy(model.state_dict())
+                inner = model.module if isinstance(model, torch.nn.DataParallel) else model
+                best_state = copy.deepcopy(inner.state_dict())
         else:
             no_improve += 1
             if patience > 0 and no_improve >= patience:
@@ -141,6 +143,7 @@ def train_model(
                 break
 
     if best_state is not None:
-        model.load_state_dict(best_state)
+        inner = model.module if isinstance(model, torch.nn.DataParallel) else model
+        inner.load_state_dict(best_state)
 
     return {"best_dev_macro_f1": best_f1}, history

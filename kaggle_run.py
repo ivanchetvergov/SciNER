@@ -70,6 +70,9 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
                         class_weights=class_weights)
     if not cfg.use_qlora:
         model = model.to(device)
+        if torch.cuda.device_count() > 1:
+            model = torch.nn.DataParallel(model)
+            print(f"[gpu] using {torch.cuda.device_count()} GPUs")
 
     if is_crf_model(model) and cfg.crf_lr > 0:
         crf_param_ids = {id(p) for p in model.crf.parameters()}
@@ -99,7 +102,8 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
                              grad_accum_steps=cfg.grad_accum_steps)
 
     ckpt_path = CHECKPOINTS_DIR / f"{cfg.model_name}.pt"
-    torch.save(model.state_dict(), ckpt_path)
+    state = model.module.state_dict() if isinstance(model, torch.nn.DataParallel) else model.state_dict()
+    torch.save(state, ckpt_path)
     print(f"[ckpt] saved → {ckpt_path}  ({ckpt_path.stat().st_size / 1e6:.0f} MB)")
 
     test_metrics, test_preds, test_true = evaluate(

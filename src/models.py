@@ -211,4 +211,5 @@ def build_model(model_name: str, base_model: str, num_labels: int,
 
 
 def is_crf_model(model: nn.Module) -> bool:
-    return isinstance(model, _CRF_MODELS)
+    inner = model.module if isinstance(model, nn.DataParallel) else model
+    return isinstance(inner, _CRF_MODELS)
