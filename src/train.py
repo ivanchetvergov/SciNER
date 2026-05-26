@@ -1,6 +1,7 @@
 import copy
 
 import torch
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 
 from .models import is_crf_model
@@ -13,9 +14,11 @@ def _is_quantized(model) -> bool:
 
 
 def train_epoch(model, loader: DataLoader, optimizer, device: torch.device,
-                scheduler=None, grad_accum_steps: int = 1) -> float:
+                scheduler=None, grad_accum_steps: int = 1,
+                scaler: GradScaler | None = None) -> float:
     model.train()
     total_loss = 0.0
+    use_amp = scaler is not None
     optimizer.zero_grad()
 
     for step, batch in enumerate(loader):
@@ -23,13 +26,24 @@ def train_epoch(model, loader: DataLoader, optimizer, device: torch.device,
         attention_mask = batch["attention_mask"].to(device)
         labels         = batch["labels"].to(device)
 
-        loss, _ = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        (loss / grad_accum_steps).backward()
+        with autocast(enabled=use_amp):
+            loss, _ = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+
+        if use_amp:
+            scaler.scale(loss / grad_accum_steps).backward()
+        else:
+            (loss / grad_accum_steps).backward()
         total_loss += loss.item()
 
         if (step + 1) % grad_accum_steps == 0 or (step + 1) == len(loader):
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            if use_amp:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
             if scheduler is not None:
                 scheduler.step()
             optimizer.zero_grad()
@@ -44,6 +58,7 @@ def evaluate(
     device: torch.device,
     id2label: dict = None,
     return_preds: bool = False,
+    use_amp: bool = False,
 ) -> dict | tuple:
     if id2label is None:
         id2label = ID2LABEL
@@ -57,33 +72,34 @@ def evaluate(
         attention_mask = batch["attention_mask"].to(device)
         labels         = batch["labels"].to(device)
 
-        if use_crf:
-            decode = model.module.decode if isinstance(model, torch.nn.DataParallel) else model.decode
-            tag_seqs = decode(input_ids, attention_mask)
-            for tags, label_seq, mask_seq in zip(tag_seqs, labels, attention_mask):
-                pred_tags, true_tags = [], []
-                tag_idx = 0
-                for l, m in zip(label_seq, mask_seq):
-                    if m.item() == 0:
-                        break
-                    if l.item() != -100:
-                        pred_tags.append(id2label[tags[tag_idx]] if tag_idx < len(tags) else "O")
+        with autocast(enabled=use_amp):
+            if use_crf:
+                decode = model.module.decode if isinstance(model, torch.nn.DataParallel) else model.decode
+                tag_seqs = decode(input_ids, attention_mask)
+                for tags, label_seq, mask_seq in zip(tag_seqs, labels, attention_mask):
+                    pred_tags, true_tags = [], []
+                    tag_idx = 0
+                    for l, m in zip(label_seq, mask_seq):
+                        if m.item() == 0:
+                            break
+                        if l.item() != -100:
+                            pred_tags.append(id2label[tags[tag_idx]] if tag_idx < len(tags) else "O")
+                            true_tags.append(id2label[l.item()])
+                        tag_idx += 1
+                    all_preds.append(pred_tags)
+                    all_true.append(true_tags)
+            else:
+                _, logits = model(input_ids=input_ids, attention_mask=attention_mask)
+                pred_ids = logits.argmax(dim=-1)
+                for pred_seq, label_seq in zip(pred_ids, labels):
+                    pred_tags, true_tags = [], []
+                    for p, l in zip(pred_seq, label_seq):
+                        if l.item() == -100:
+                            continue
+                        pred_tags.append(id2label[p.item()])
                         true_tags.append(id2label[l.item()])
-                    tag_idx += 1
-                all_preds.append(pred_tags)
-                all_true.append(true_tags)
-        else:
-            _, logits = model(input_ids=input_ids, attention_mask=attention_mask)
-            pred_ids = logits.argmax(dim=-1)
-            for pred_seq, label_seq in zip(pred_ids, labels):
-                pred_tags, true_tags = [], []
-                for p, l in zip(pred_seq, label_seq):
-                    if l.item() == -100:
-                        continue
-                    pred_tags.append(id2label[p.item()])
-                    true_tags.append(id2label[l.item()])
-                all_preds.append(pred_tags)
-                all_true.append(true_tags)
+                    all_preds.append(pred_tags)
+                    all_true.append(true_tags)
 
     metrics = compute_metrics(all_preds, all_true, ENTITY_TYPES)
     if return_preds:
@@ -102,6 +118,7 @@ def train_model(
     patience: int = 0,
     scheduler=None,
     grad_accum_steps: int = 1,
+    scaler: GradScaler | None = None,
 ) -> tuple[dict, list[dict]]:
     """
     Full training loop with best-checkpoint tracking by dev macro F1.
@@ -110,14 +127,16 @@ def train_model(
     Returns (best_metrics, history).
     """
     quantized = _is_quantized(model)
+    use_amp = scaler is not None
     best_f1 = -1.0
     best_state = None
     no_improve = 0
     history = []
 
     for epoch in range(1, num_epochs + 1):
-        avg_loss = train_epoch(model, train_loader, optimizer, device, scheduler, grad_accum_steps)
-        dev_metrics = evaluate(model, dev_loader, device)
+        avg_loss = train_epoch(model, train_loader, optimizer, device,
+                               scheduler, grad_accum_steps, scaler)
+        dev_metrics = evaluate(model, dev_loader, device, use_amp=use_amp)
         dev_f1 = dev_metrics["macro_f1"]
 
         history.append({

@@ -80,7 +80,7 @@ class SciBertCRF(nn.Module):
     def forward(self, input_ids, attention_mask, labels=None):
         emissions = self.classifier(
             self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        )
+        ).float()
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
@@ -92,7 +92,7 @@ class SciBertCRF(nn.Module):
     def decode(self, input_ids, attention_mask):
         emissions = self.classifier(
             self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        )
+        ).float()
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 
@@ -111,7 +111,7 @@ class SciBertMLPCRF(nn.Module):
     def forward(self, input_ids, attention_mask, labels=None):
         emissions = self.mlp(
             self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        )
+        ).float()
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
@@ -123,7 +123,7 @@ class SciBertMLPCRF(nn.Module):
     def decode(self, input_ids, attention_mask):
         emissions = self.mlp(
             self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        )
+        ).float()
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 

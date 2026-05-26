@@ -16,6 +16,7 @@ from math import ceil
 from pathlib import Path
 
 import torch
+from torch.cuda.amp import GradScaler
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
@@ -59,9 +60,10 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
     set_seed(cfg.seed)
 
     train_ds, dev_ds, test_ds = build_datasets(DATA_DIR, cfg.base_model, cfg.max_length)
-    train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,  num_workers=2, pin_memory=True)
-    dev_loader   = DataLoader(dev_ds,   batch_size=cfg.batch_size, shuffle=False, num_workers=2, pin_memory=True)
-    test_loader  = DataLoader(test_ds,  batch_size=cfg.batch_size, shuffle=False, num_workers=2, pin_memory=True)
+    dl_kwargs = dict(num_workers=4, pin_memory=True, persistent_workers=True)
+    train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,  **dl_kwargs)
+    dev_loader   = DataLoader(dev_ds,   batch_size=cfg.batch_size, shuffle=False, **dl_kwargs)
+    test_loader  = DataLoader(test_ds,  batch_size=cfg.batch_size, shuffle=False, **dl_kwargs)
 
     class_weights = compute_class_weights(train_ds, NUM_LABELS) if cfg.use_class_weights else None
 
@@ -73,6 +75,8 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
         if torch.cuda.device_count() > 1:
             model = torch.nn.DataParallel(model)
             print(f"[gpu] using {torch.cuda.device_count()} GPUs")
+        if hasattr(torch, "compile"):
+            model = torch.compile(model)
 
     if is_crf_model(model) and cfg.crf_lr > 0:
         crf_param_ids = {id(p) for p in model.crf.parameters()}
@@ -95,11 +99,14 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
         num_training_steps=steps_per_epoch * cfg.num_epochs,
     )
 
+    scaler = GradScaler() if (not cfg.use_qlora and device.type == "cuda") else None
+
     _, history = train_model(model, train_loader, dev_loader, optimizer,
                              device, cfg.num_epochs, cfg.model_name,
                              patience=cfg.early_stopping_patience,
                              scheduler=scheduler,
-                             grad_accum_steps=cfg.grad_accum_steps)
+                             grad_accum_steps=cfg.grad_accum_steps,
+                             scaler=scaler)
 
     ckpt_path = CHECKPOINTS_DIR / f"{cfg.model_name}.pt"
     state = model.module.state_dict() if isinstance(model, torch.nn.DataParallel) else model.state_dict()
@@ -107,7 +114,8 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
     print(f"[ckpt] saved → {ckpt_path}  ({ckpt_path.stat().st_size / 1e6:.0f} MB)")
 
     test_metrics, test_preds, test_true = evaluate(
-        model, test_loader, device, ID2LABEL, return_preds=True
+        model, test_loader, device, ID2LABEL,
+        return_preds=True, use_amp=(scaler is not None),
     )
 
     results_file = f"{cfg.model_name}_{run_id}.json"
