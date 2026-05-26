@@ -68,6 +68,14 @@ EXPERIMENTS = [
         use_class_weights=False,
     ),
     ExperimentConfig(
+        model_name="scibert_linear_crf_noweight",
+        base_model="allenai/scibert_scivocab_cased",
+        num_epochs=10,
+        early_stopping_patience=3,
+        crf_lr=1e-3,
+        use_class_weights=False,
+    ),
+    ExperimentConfig(
         model_name="scibert_linear_crf",
         base_model="allenai/scibert_scivocab_cased",
         num_epochs=10,

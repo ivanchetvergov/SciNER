@@ -70,17 +70,21 @@ class SciBertMLP(nn.Module):
 
 
 class SciBertCRF(nn.Module):
-    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased"):
+    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased",
+                 class_weights: torch.Tensor | None = None):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
         self.classifier = nn.Linear(hidden, num_labels)
         self.crf = CRF(num_labels, batch_first=True)
+        self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
         emissions = self.classifier(
             self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
         ).float()
+        if self.class_weights is not None:
+            emissions = emissions * self.class_weights.to(emissions.device)
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
@@ -206,8 +210,8 @@ def build_model(model_name: str, base_model: str, num_labels: int,
         return SciBertNER(num_labels, base_model, class_weights)
     if model_name == "scibert_mlp":
         return SciBertMLP(num_labels, base_model, class_weights)
-    if model_name == "scibert_linear_crf":
-        return SciBertCRF(num_labels, base_model)
+    if model_name in ("scibert_linear_crf", "scibert_linear_crf_noweight"):
+        return SciBertCRF(num_labels, base_model, class_weights)
     if model_name == "scibert_concat4":
         return SciBertConcat4(num_labels, base_model, class_weights)
     if model_name == "deberta_qlora":

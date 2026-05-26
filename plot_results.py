@@ -21,7 +21,7 @@ MODEL_ORDER  = [
     "roberta_linear_noweight", "roberta_linear",
     "scibert_linear_noweight", "scibert_linear",
     "scibert_mlp",
-    "scibert_linear_crf", "scibert_concat4",
+    "scibert_linear_crf_noweight", "scibert_linear_crf", "scibert_concat4",
 ]
 LABELS = {
     "bert_linear_noweight":      "BERT\nLinear\n(no weight)",
@@ -31,7 +31,8 @@ LABELS = {
     "scibert_linear_noweight":   "SciBERT\nLinear\n(no weight)",
     "scibert_linear":            "SciBERT\nLinear\n(weighted)",
     "scibert_mlp":               "SciBERT\nMLP",
-    "scibert_linear_crf":        "SciBERT\nLinear+CRF",
+    "scibert_linear_crf_noweight": "SciBERT\nLinear+CRF\n(no weight)",
+    "scibert_linear_crf":          "SciBERT\nLinear+CRF\n(weighted)",
     "scibert_concat4":           "SciBERT\nConcat-4",
 }
 
