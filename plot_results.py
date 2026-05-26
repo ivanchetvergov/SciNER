@@ -4,6 +4,7 @@ Skips models with macro_f1 < 0.1 (broken runs).
 
 Usage:
     python plot_results.py
+    python plot_results.py --results-dir results/v1
     python plot_results.py --all   # include broken runs too
 """
 import argparse
@@ -13,7 +14,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-RESULTS_DIR  = Path("results")
 PLOTS_DIR    = Path("plots")
 ENTITY_TYPES = ["Generic", "Material", "Method", "Metric", "OtherScientificTerm", "Task"]
 MODEL_ORDER  = [
@@ -24,24 +24,23 @@ MODEL_ORDER  = [
     "scibert_linear_crf_noweight", "scibert_linear_crf", "scibert_concat4",
 ]
 LABELS = {
-    "bert_linear_noweight":      "BERT\nLinear\n(no weight)",
-    "bert_linear":               "BERT\nLinear\n(weighted)",
-    "roberta_linear_noweight":   "RoBERTa\nLinear\n(no weight)",
-    "roberta_linear":            "RoBERTa\nLinear\n(weighted)",
-    "scibert_linear_noweight":   "SciBERT\nLinear\n(no weight)",
-    "scibert_linear":            "SciBERT\nLinear\n(weighted)",
-    "scibert_mlp":               "SciBERT\nMLP",
-    "scibert_linear_crf_noweight": "SciBERT\nLinear+CRF\n(no weight)",
-    "scibert_linear_crf":          "SciBERT\nLinear+CRF\n(weighted)",
-    "scibert_concat4":           "SciBERT\nConcat-4",
+    "bert_linear_noweight":         "BERT\nLinear\n(no weight)",
+    "bert_linear":                  "BERT\nLinear\n(weighted)",
+    "roberta_linear_noweight":      "RoBERTa\nLinear\n(no weight)",
+    "roberta_linear":               "RoBERTa\nLinear\n(weighted)",
+    "scibert_linear_noweight":      "SciBERT\nLinear\n(no weight)",
+    "scibert_linear":               "SciBERT\nLinear\n(weighted)",
+    "scibert_mlp":                  "SciBERT\nMLP",
+    "scibert_linear_crf_noweight":  "SciBERT\nLinear+CRF\n(no weight)",
+    "scibert_linear_crf":           "SciBERT\nLinear+CRF\n(weighted)",
+    "scibert_concat4":              "SciBERT\nConcat-4",
 }
 
 
-def load_data(include_broken: bool):
-    registry = pd.read_csv(RESULTS_DIR / "registry.csv")
-    history  = pd.read_csv(RESULTS_DIR / "history.csv")
+def load_data(results_dir: Path, include_broken: bool):
+    registry = pd.read_csv(results_dir / "registry.csv")
+    history  = pd.read_csv(results_dir / "history.csv")
 
-    # latest run per model
     registry = registry.sort_values("run_id").groupby("model_name", as_index=False).last()
     history  = history.sort_values("run_id").groupby(
         ["model_name", "epoch"], as_index=False
@@ -58,11 +57,11 @@ def palette(n):
     return [plt.cm.tab10(i / 10) for i in range(n)]
 
 
-def plot_macro_f1(registry, models, colors):
+def plot_macro_f1(registry, models, colors, plots_dir: Path):
     vals   = [registry.loc[m, "macro_f1"] for m in models]
     labels = [LABELS.get(m, m) for m in models]
 
-    fig, ax = plt.subplots(figsize=(9, 4))
+    fig, ax = plt.subplots(figsize=(11, 4))
     bars = ax.bar(labels, vals, color=colors, edgecolor="white", linewidth=0.8, zorder=3)
     for bar, v in zip(bars, vals):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.003,
@@ -73,13 +72,13 @@ def plot_macro_f1(registry, models, colors):
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.spines[["top", "right"]].set_visible(False)
     plt.tight_layout()
-    out = PLOTS_DIR / "macro_f1_comparison.png"
+    out = plots_dir / "macro_f1_comparison.png"
     plt.savefig(out, dpi=150)
     print(f"saved → {out}")
-    plt.show()
+    plt.close()
 
 
-def plot_entity_f1(registry, models, colors):
+def plot_entity_f1(registry, models, colors, plots_dir: Path):
     n_models, n_ent = len(models), len(ENTITY_TYPES)
     x, width = np.arange(n_ent), 0.75 / n_models
 
@@ -100,13 +99,13 @@ def plot_entity_f1(registry, models, colors):
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.spines[["top", "right"]].set_visible(False)
     plt.tight_layout()
-    out = PLOTS_DIR / "entity_f1_comparison.png"
+    out = plots_dir / "entity_f1_comparison.png"
     plt.savefig(out, dpi=150)
     print(f"saved → {out}")
-    plt.show()
+    plt.close()
 
 
-def plot_curves(history, models, colors):
+def plot_curves(history, models, colors, plots_dir: Path):
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     for i, model in enumerate(models):
         df = history[history["model_name"] == model].sort_values("epoch")
@@ -131,25 +130,59 @@ def plot_curves(history, models, colors):
 
     plt.suptitle("SciERC NER — Learning Curves", fontsize=13, fontweight="bold", y=1.02)
     plt.tight_layout()
-    out = PLOTS_DIR / "learning_curves.png"
+    out = plots_dir / "learning_curves.png"
     plt.savefig(out, dpi=150, bbox_inches="tight")
     print(f"saved → {out}")
-    plt.show()
+    plt.close()
+
+
+def plot_heatmap(registry, models, plots_dir: Path):
+    data = np.array([[registry.loc[m, f"{e}_f1"] for e in ENTITY_TYPES] for m in models])
+    row_labels = [LABELS.get(m, m).replace("\n", " ") for m in models]
+
+    fig, ax = plt.subplots(figsize=(10, 0.55 * len(models) + 1.5))
+    im = ax.imshow(data, aspect="auto", cmap="RdYlGn", vmin=0.45, vmax=0.80)
+    plt.colorbar(im, ax=ax, label="F1")
+
+    ax.set_xticks(range(len(ENTITY_TYPES)))
+    ax.set_xticklabels(ENTITY_TYPES, fontsize=10)
+    ax.set_yticks(range(len(models)))
+    ax.set_yticklabels(row_labels, fontsize=9)
+
+    for i in range(len(models)):
+        for j in range(len(ENTITY_TYPES)):
+            ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center",
+                    fontsize=8, color="black")
+
+    ax.set_title("SciERC NER — Per-Entity F1 Heatmap", fontsize=13, fontweight="bold")
+    plt.tight_layout()
+    out = plots_dir / "entity_f1_heatmap.png"
+    plt.savefig(out, dpi=150)
+    print(f"saved → {out}")
+    plt.close()
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--results-dir", default="results", help="path to results directory")
+    parser.add_argument("--plots-dir",   default=None,      help="output plots dir (default: plots/<results-dir-name>)")
     parser.add_argument("--all", action="store_true", help="include broken runs (macro_f1 < 0.1)")
     args = parser.parse_args()
 
-    PLOTS_DIR.mkdir(exist_ok=True)
-    registry, history, models = load_data(include_broken=args.all)
-    print(f"Plotting: {models}\n")
+    results_dir = Path(args.results_dir)
+    plots_dir   = Path(args.plots_dir) if args.plots_dir else PLOTS_DIR / results_dir.name
+    plots_dir.mkdir(parents=True, exist_ok=True)
+
+    registry, history, models = load_data(results_dir, include_broken=args.all)
+    print(f"Results dir : {results_dir}")
+    print(f"Plots dir   : {plots_dir}")
+    print(f"Models ({len(models)}): {models}\n")
 
     colors = palette(len(models))
-    plot_macro_f1(registry, models, colors)
-    plot_entity_f1(registry, models, colors)
-    plot_curves(history, models, colors)
+    plot_macro_f1(registry, models, colors, plots_dir)
+    plot_entity_f1(registry, models, colors, plots_dir)
+    plot_curves(history, models, colors, plots_dir)
+    plot_heatmap(registry, models, plots_dir)
 
 
 if __name__ == "__main__":
