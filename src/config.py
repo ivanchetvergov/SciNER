@@ -22,10 +22,24 @@ class ExperimentConfig:
 
 EXPERIMENTS = [
     ExperimentConfig(
+        model_name="bert_linear_noweight",
+        base_model="bert-base-cased",
+        num_epochs=10,
+        early_stopping_patience=3,
+        use_class_weights=False,
+    ),
+    ExperimentConfig(
         model_name="bert_linear",
         base_model="bert-base-cased",
         num_epochs=10,
         early_stopping_patience=3,
+    ),
+    ExperimentConfig(
+        model_name="roberta_linear_noweight",
+        base_model="roberta-base",
+        num_epochs=10,
+        early_stopping_patience=3,
+        use_class_weights=False,
     ),
     ExperimentConfig(
         model_name="roberta_linear",
@@ -41,6 +55,13 @@ EXPERIMENTS = [
     ),
     ExperimentConfig(
         model_name="scibert_linear_noweight",
+        base_model="allenai/scibert_scivocab_cased",
+        num_epochs=10,
+        early_stopping_patience=3,
+        use_class_weights=False,
+    ),
+    ExperimentConfig(
+        model_name="scibert_mlp",
         base_model="allenai/scibert_scivocab_cased",
         num_epochs=10,
         early_stopping_patience=3,
