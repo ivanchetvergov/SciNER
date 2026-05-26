@@ -140,7 +140,9 @@ class SciBertConcat4(nn.Module):
 
         self._captured: list[torch.Tensor] = []
         for layer in self.encoder.encoder.layer[-4:]:
-            layer.register_forward_hook(lambda m, inp, out: self._captured.append(out[0]))
+            layer.register_forward_hook(
+                lambda m, inp, out: self._captured.append(out[0] if isinstance(out, (tuple, list)) else out)
+            )
 
     def forward(self, input_ids, attention_mask, labels=None):
         self._captured.clear()
