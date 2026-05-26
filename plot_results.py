@@ -13,6 +13,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from seqeval.metrics import precision_score, recall_score, f1_score, classification_report
 
 ENTITY_TYPES = ["Generic", "Material", "Method", "Metric", "OtherScientificTerm", "Task"]
 MODEL_ORDER  = [
@@ -254,6 +255,109 @@ def plot_confusion_matrix(matrix: np.ndarray, model_name: str, out_path: Path):
     _save(fig, out_path)
 
 
+# ── precision / recall ────────────────────────────────────────────────────────
+
+def compute_pr(preds: list, trues: list) -> dict[str, dict[str, float]]:
+    """Compute per-entity precision, recall, F1 from BIO sequences via seqeval."""
+    report = classification_report(trues, preds, output_dict=True, zero_division=0)
+    result = {}
+    for etype in ENTITY_TYPES:
+        r = report.get(etype, {})
+        result[etype] = {
+            "precision": r.get("precision", 0.0),
+            "recall":    r.get("recall",    0.0),
+            "f1":        r.get("f1-score",  0.0),
+        }
+    return result
+
+
+def plot_pr_bars(pr: dict, model_name: str, plots_dir: Path):
+    """P / R / F1 bar chart for a single model."""
+    x      = np.arange(len(ENTITY_TYPES))
+    width  = 0.25
+    ps     = [pr[e]["precision"] for e in ENTITY_TYPES]
+    rs     = [pr[e]["recall"]    for e in ENTITY_TYPES]
+    fs     = [pr[e]["f1"]        for e in ENTITY_TYPES]
+
+    fig, ax = plt.subplots(figsize=(11, 4))
+    ax.bar(x - width, ps, width, label="Precision", color="#4C72B0", zorder=3)
+    ax.bar(x,         rs, width, label="Recall",    color="#DD8452", zorder=3)
+    ax.bar(x + width, fs, width, label="F1",        color="#55A868", zorder=3)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(ENTITY_TYPES, fontsize=10)
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel("Score", fontsize=11)
+    label = LABELS.get(model_name, model_name).replace("\n", " ")
+    ax.set_title(f"Precision / Recall / F1 — {label}", fontsize=12, fontweight="bold")
+    ax.legend(fontsize=9)
+    ax.grid(axis="y", linestyle="--", alpha=0.4, zorder=0)
+    ax.spines[["top", "right"]].set_visible(False)
+    plt.tight_layout()
+    _save(fig, plots_dir / f"pr_bars_{model_name}.png")
+
+
+def plot_pr_scatter(pr_all: dict[str, dict], models: list[str], plots_dir: Path):
+    """Precision vs Recall scatter — one point per (model, entity_type)."""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    markers = ["o", "s", "^", "D", "v", "P"]
+    colors  = [plt.cm.tab10(i / 10) for i in range(len(models))]
+
+    for i, model in enumerate(models):
+        if model not in pr_all:
+            continue
+        pr = pr_all[model]
+        for j, etype in enumerate(ENTITY_TYPES):
+            p, r = pr[etype]["precision"], pr[etype]["recall"]
+            ax.scatter(r, p, color=colors[i], marker=markers[j % len(markers)],
+                       s=70, zorder=3, alpha=0.85)
+
+    # Legend: models by color
+    for i, model in enumerate(models):
+        ax.scatter([], [], color=colors[i], s=50,
+                   label=LABELS.get(model, model).replace("\n", " "))
+    # Legend: entity types by marker
+    for j, etype in enumerate(ENTITY_TYPES):
+        ax.scatter([], [], marker=markers[j % len(markers)], color="gray", s=50, label=etype)
+
+    ax.plot([0, 1], [0, 1], "k--", lw=0.8, alpha=0.3)  # P=R diagonal
+    ax.set_xlabel("Recall",    fontsize=11)
+    ax.set_ylabel("Precision", fontsize=11)
+    ax.set_xlim(0, 1.05)
+    ax.set_ylim(0, 1.05)
+    ax.set_title("Precision vs Recall per Entity Type", fontsize=12, fontweight="bold")
+    ax.legend(fontsize=7, ncol=2, loc="lower right")
+    ax.grid(linestyle="--", alpha=0.3, zorder=0)
+    ax.spines[["top", "right"]].set_visible(False)
+    plt.tight_layout()
+    _save(fig, plots_dir / "pr_scatter.png")
+
+
+def plot_pr_heatmaps(pr_all: dict[str, dict], models: list[str], plots_dir: Path):
+    """Side-by-side heatmaps: precision (left) and recall (right)."""
+    p_data = np.array([[pr_all[m][e]["precision"] for e in ENTITY_TYPES]
+                        for m in models if m in pr_all])
+    r_data = np.array([[pr_all[m][e]["recall"]    for e in ENTITY_TYPES]
+                        for m in models if m in pr_all])
+    row_labels = [LABELS.get(m, m).replace("\n", " ") for m in models if m in pr_all]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 0.55 * len(row_labels) + 1.5))
+    for ax, data, title in zip(axes, [p_data, r_data], ["Precision", "Recall"]):
+        im = ax.imshow(data, aspect="auto", cmap="RdYlGn", vmin=0.3, vmax=0.9)
+        plt.colorbar(im, ax=ax, label=title)
+        ax.set_xticks(range(len(ENTITY_TYPES)))
+        ax.set_xticklabels(ENTITY_TYPES, fontsize=9)
+        ax.set_yticks(range(len(row_labels)))
+        ax.set_yticklabels(row_labels, fontsize=9)
+        for i in range(len(row_labels)):
+            for j in range(len(ENTITY_TYPES)):
+                ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center",
+                        fontsize=8, color="black", fontweight="bold")
+        ax.set_title(f"{title} per Entity Type", fontsize=11, fontweight="bold")
+    plt.tight_layout()
+    _save(fig, plots_dir / "pr_heatmaps.png")
+
+
 def _save(fig, path: Path):
     fig.savefig(path, dpi=150, bbox_inches="tight")
     print(f"  saved → {path}")
@@ -284,15 +388,25 @@ def main():
     plot_heatmap(registry, models, plots_dir)
     plot_curves(history, models, colors, plots_dir)
 
-    print("\nconfusion matrices")
+    print("\nconfusion matrices + precision/recall")
+    pr_all = {}
     for model in models:
         run_id = registry.loc[model, "run_id"]
         preds, trues = load_predictions(results_dir, model, run_id)
-        if preds is None:
-            print(f"  skip {model} — no predictions JSON")
+        if not preds:
+            print(f"  skip {model} — no predictions")
             continue
         matrix = build_entity_confusion(preds, trues)
         plot_confusion_matrix(matrix, model, conf_dir / f"{model}.png")
+        pr_all[model] = compute_pr(preds, trues)
+
+    if pr_all:
+        print("\nprecision/recall plots")
+        # P/R/F1 bars for best model (highest macro F1)
+        best = max(pr_all, key=lambda m: registry.loc[m, "macro_f1"])
+        plot_pr_bars(pr_all[best], best, plots_dir)
+        plot_pr_scatter(pr_all, models, plots_dir)
+        plot_pr_heatmaps(pr_all, models, plots_dir)
 
 
 if __name__ == "__main__":
