@@ -17,7 +17,7 @@ RESULTS_DIR  = Path("results")
 PLOTS_DIR    = Path("plots")
 ENTITY_TYPES = ["Generic", "Material", "Method", "Metric", "OtherScientificTerm", "Task"]
 MODEL_ORDER  = [
-    "bert_linear_noweight", "bert_linear",
+    "bert_linear_noweight", "bert_linear", "roberta_linear",
     "scibert_linear", "scibert_linear_noweight",
     "scibert_mlp",
     "scibert_linear_crf", "scibert_concat4", "deberta_qlora",
@@ -25,6 +25,7 @@ MODEL_ORDER  = [
 LABELS = {
     "bert_linear_noweight":   "BERT\nLinear\n(no weight)",
     "bert_linear":            "BERT\nLinear\n(weighted)",
+    "roberta_linear":         "RoBERTa\nLinear\n(weighted)",
     "scibert_linear":         "SciBERT\nLinear\n(weighted)",
     "scibert_linear_noweight":"SciBERT\nLinear\n(no weight)",
     "scibert_mlp":            "SciBERT\nMLP\n(no weight)",

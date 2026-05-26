@@ -28,6 +28,12 @@ EXPERIMENTS = [
         early_stopping_patience=3,
     ),
     ExperimentConfig(
+        model_name="roberta_linear",
+        base_model="roberta-base",
+        num_epochs=10,
+        early_stopping_patience=3,
+    ),
+    ExperimentConfig(
         model_name="scibert_linear",
         base_model="allenai/scibert_scivocab_cased",
         num_epochs=10,

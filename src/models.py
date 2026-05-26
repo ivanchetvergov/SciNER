@@ -200,7 +200,7 @@ _CRF_MODELS = (SciBertCRF, SciBertMLPCRF)
 def build_model(model_name: str, base_model: str, num_labels: int,
                 use_qlora: bool = False, lora_rank: int = 16, lora_alpha: int = 32,
                 class_weights: torch.Tensor | None = None) -> nn.Module:
-    if model_name == "bert_linear":
+    if model_name in ("bert_linear", "roberta_linear"):
         return BertNER(num_labels, base_model, class_weights)
     if model_name in ("scibert_linear", "scibert_linear_noweight"):
         return SciBertNER(num_labels, base_model, class_weights)
