@@ -26,10 +26,12 @@
 \contentsline {subsection}{\numberline {4.2}Инфраструктура}{8}{subsection.4.2}%
 \contentsline {section}{\numberline {5}Результаты}{9}{section.5}%
 \contentsline {subsection}{\numberline {5.1}Эксперимент 1 --- базовый препроцессинг}{9}{subsection.5.1}%
-\contentsline {subsubsection}{\numberline {5.1.1}Влияние взвешивания классов}{9}{subsubsection.5.1.1}%
-\contentsline {subsubsection}{\numberline {5.1.2}Влияние научного предобучения}{9}{subsubsection.5.1.2}%
-\contentsline {subsubsection}{\numberline {5.1.3}Влияние архитектуры головы}{9}{subsubsection.5.1.3}%
-\contentsline {subsection}{\numberline {5.2}Кривые обучения}{9}{subsection.5.2}%
-\contentsline {subsection}{\numberline {5.3}Анализ ошибок}{9}{subsection.5.3}%
-\contentsline {subsection}{\numberline {5.4}Эксперимент 2 --- улучшенный препроцессинг}{10}{subsection.5.4}%
-\contentsline {section}{Заключение}{12}{section*.11}%
+\contentsline {subsubsection}{\numberline {5.1.1}Влияние предобучения: SciBERT vs BERT vs RoBERTa}{9}{subsubsection.5.1.1}%
+\contentsline {subsubsection}{\numberline {5.1.2}Взвешивание классов: noweight стабильно лучше}{9}{subsubsection.5.1.2}%
+\contentsline {subsubsection}{\numberline {5.1.3}Архитектура головы: простое работает лучше}{10}{subsubsection.5.1.3}%
+\contentsline {subsubsection}{\numberline {5.1.4}Анализ по типам сущностей}{10}{subsubsection.5.1.4}%
+\contentsline {subsubsection}{\numberline {5.1.5}Анализ матриц ошибок}{11}{subsubsection.5.1.5}%
+\contentsline {subsubsection}{\numberline {5.1.6}Кривые обучения}{11}{subsubsection.5.1.6}%
+\contentsline {subsubsection}{\numberline {5.1.7}Сравнение с опубликованными результатами}{12}{subsubsection.5.1.7}%
+\contentsline {subsection}{\numberline {5.2}Эксперимент 2 --- улучшенный препроцессинг}{12}{subsection.5.2}%
+\contentsline {section}{Заключение}{13}{section*.11}%
