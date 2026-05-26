@@ -199,10 +199,8 @@ def build_model(model_name: str, base_model: str, num_labels: int,
         return SciBertNER(num_labels, base_model, class_weights)
     if model_name == "scibert_mlp":
         return SciBertMLP(num_labels, base_model, class_weights)
-    if model_name == "scibert_crf":
+    if model_name == "scibert_linear_crf":
         return SciBertCRF(num_labels, base_model)
-    if model_name == "scibert_mlp_crf":
-        return SciBertMLPCRF(num_labels, base_model)
     if model_name == "scibert_concat4":
         return SciBertConcat4(num_labels, base_model, class_weights)
     if model_name == "deberta_qlora":
