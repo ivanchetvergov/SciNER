@@ -402,11 +402,11 @@ def main():
 
     if pr_all:
         print("\nprecision/recall plots")
-        # P/R/F1 bars for best model (highest macro F1)
-        best = max(pr_all, key=lambda m: registry.loc[m, "macro_f1"])
+        top5 = sorted(pr_all, key=lambda m: registry.loc[m, "macro_f1"], reverse=True)[:5]
+        best = top5[0]
         plot_pr_bars(pr_all[best], best, plots_dir)
-        plot_pr_scatter(pr_all, models, plots_dir)
-        plot_pr_heatmaps(pr_all, models, plots_dir)
+        plot_pr_scatter(pr_all, top5, plots_dir)
+        plot_pr_heatmaps(pr_all, top5, plots_dir)
 
 
 if __name__ == "__main__":
