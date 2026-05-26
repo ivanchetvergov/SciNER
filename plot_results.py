@@ -406,7 +406,7 @@ def main():
         best = top5[0]
         plot_pr_bars(pr_all[best], best, plots_dir)
         plot_pr_scatter(pr_all, top5, plots_dir)
-        plot_pr_heatmaps(pr_all, top5, plots_dir)
+        plot_pr_heatmaps(pr_all, [m for m in models if m in pr_all], plots_dir)
 
 
 if __name__ == "__main__":
