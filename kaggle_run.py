@@ -7,6 +7,7 @@ Usage (in notebook cell):
     !python kaggle_run.py --epochs 5 --batch-size 8             # override
 """
 import argparse
+import gc
 import json
 import shutil
 import tarfile
@@ -213,6 +214,8 @@ def main():
         result = run_experiment(cfg, device, run_id)
         all_results.append(result)
         pack_artifacts()
+        gc.collect()
+        torch.cuda.empty_cache()
 
     print_summary(all_results)
 
