@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
 
 from src.config import EXPERIMENTS, ExperimentConfig
-from src.data import build_datasets, compute_class_weights, ID2LABEL, NUM_LABELS, ENTITY_TYPES
+from src.data import build_datasets, compute_class_weights, ner_collate_fn, ID2LABEL, NUM_LABELS, ENTITY_TYPES
 from src.models import build_model, is_crf_model
 from src.train import train_model, evaluate
 from src.utils import set_seed, save_results, append_registry, append_history
@@ -60,8 +60,8 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
     print(f"\n{'='*60}\n  {cfg.model_name}  |  {cfg.base_model}\n{'='*60}")
     set_seed(cfg.seed)
 
-    train_ds, dev_ds, test_ds = build_datasets(DATA_DIR, cfg.base_model, cfg.max_length)
-    dl_kwargs = dict(num_workers=4, pin_memory=True, persistent_workers=True)
+    train_ds, dev_ds, test_ds = build_datasets(DATA_DIR, cfg.base_model, cfg.max_length, augment=cfg.augment)
+    dl_kwargs = dict(num_workers=4, pin_memory=True, persistent_workers=True, collate_fn=ner_collate_fn)
     train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,  **dl_kwargs)
     dev_loader   = DataLoader(dev_ds,   batch_size=cfg.batch_size, shuffle=False, **dl_kwargs)
     test_loader  = DataLoader(test_ds,  batch_size=cfg.batch_size, shuffle=False, **dl_kwargs)
