@@ -77,11 +77,12 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
             print(f"[gpu] using {torch.cuda.device_count()} GPUs")
 
     if is_crf_model(model) and cfg.crf_lr > 0:
-        crf_param_ids = {id(p) for p in model.crf.parameters()}
+        inner = model.module if isinstance(model, torch.nn.DataParallel) else model
+        crf_param_ids = {id(p) for p in inner.crf.parameters()}
         optimizer = AdamW([
             {"params": [p for p in model.parameters() if p.requires_grad and id(p) not in crf_param_ids],
              "lr": cfg.lr},
-            {"params": [p for p in model.crf.parameters() if p.requires_grad],
+            {"params": [p for p in inner.crf.parameters() if p.requires_grad],
              "lr": cfg.crf_lr},
         ], weight_decay=0.01)
     else:
