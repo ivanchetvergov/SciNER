@@ -8,6 +8,10 @@ from .utils import compute_metrics
 from .data import ID2LABEL, ENTITY_TYPES
 
 
+def _is_quantized(model) -> bool:
+    return any("bitsandbytes" in type(m).__module__ for m in model.modules())
+
+
 def train_epoch(model, loader: DataLoader, optimizer, device: torch.device) -> float:
     model.train()
     total_loss = 0.0
@@ -48,18 +52,19 @@ def evaluate(
 
         if use_crf:
             tag_seqs = model.decode(input_ids, attention_mask)
-            # align with label positions (skip -100)
-            for tags, label_seq in zip(tag_seqs, labels):
+            # CRF decodes over all attention_mask=1 positions.
+            # Advance tag_idx for every non-padding position, but only record
+            # where label != -100 (first subtoken of each word).
+            for tags, label_seq, mask_seq in zip(tag_seqs, labels, attention_mask):
                 pred_tags, true_tags = [], []
-                tag_iter = iter(tags)
-                for l in label_seq:
-                    if l.item() == -100:
-                        continue
-                    true_tags.append(id2label[l.item()])
-                    try:
-                        pred_tags.append(id2label[next(tag_iter)])
-                    except StopIteration:
-                        pred_tags.append("O")
+                tag_idx = 0
+                for l, m in zip(label_seq, mask_seq):
+                    if m.item() == 0:
+                        break
+                    if l.item() != -100:
+                        pred_tags.append(id2label[tags[tag_idx]] if tag_idx < len(tags) else "O")
+                        true_tags.append(id2label[l.item()])
+                    tag_idx += 1
                 all_preds.append(pred_tags)
                 all_true.append(true_tags)
         else:
@@ -86,14 +91,18 @@ def train_model(
     device: torch.device,
     num_epochs: int,
     model_name: str = "",
+    patience: int = 0,
 ) -> tuple[dict, list[dict]]:
     """
     Full training loop with best-checkpoint tracking by dev macro F1.
+    patience > 0 enables early stopping.
+    Quantized (4-bit) models skip deepcopy/load_state_dict — incompatible with bitsandbytes.
     Returns (best_metrics, history).
-    history is a list of {epoch, train_loss, dev_macro_f1} dicts.
     """
+    quantized = _is_quantized(model)
     best_f1 = -1.0
     best_state = None
+    no_improve = 0
     history = []
 
     for epoch in range(1, num_epochs + 1):
@@ -107,12 +116,20 @@ def train_model(
             "dev_macro_f1": dev_f1,
         })
 
-        tag = " *" if dev_f1 > best_f1 else ""
+        improved = dev_f1 > best_f1
+        tag = " *" if improved else ""
         print(f"[{model_name}] Epoch {epoch:2d} | loss: {avg_loss:.4f} | dev macro F1: {dev_f1:.4f}{tag}")
 
-        if dev_f1 > best_f1:
+        if improved:
             best_f1 = dev_f1
-            best_state = copy.deepcopy(model.state_dict())
+            no_improve = 0
+            if not quantized:
+                best_state = copy.deepcopy(model.state_dict())
+        else:
+            no_improve += 1
+            if patience > 0 and no_improve >= patience:
+                print(f"[{model_name}] Early stopping at epoch {epoch} (no improvement for {patience} epochs)")
+                break
 
     if best_state is not None:
         model.load_state_dict(best_state)

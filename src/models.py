@@ -117,11 +117,32 @@ class SciBertMLPCRF(nn.Module):
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 
+class SciBertConcat4(nn.Module):
+    """SciBERT with last-4-hidden-layers concatenation → Linear head."""
+
+    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased"):
+        super().__init__()
+        self.encoder = AutoModel.from_pretrained(base_model, output_hidden_states=True)
+        hidden = self.encoder.config.hidden_size
+        self.classifier = nn.Linear(hidden * 4, num_labels)
+        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+
+    def forward(self, input_ids, attention_mask, labels=None):
+        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
+        # hidden_states: tuple of (num_layers+1) tensors (B, T, H); last 4 = layers 9-12
+        last_4 = torch.cat(outputs.hidden_states[-4:], dim=-1)
+        logits = self.classifier(last_4)
+        loss = None
+        if labels is not None:
+            loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
+        return loss, logits
+
+
 class DeBertaQLoRA(nn.Module):
     def __init__(self, num_labels: int, base_model: str = "microsoft/deberta-v3-large",
                  lora_rank: int = 16, lora_alpha: int = 32):
         super().__init__()
-        from peft import get_peft_model, LoraConfig, TaskType
+        from peft import get_peft_model, prepare_model_for_kbit_training, LoraConfig, TaskType
 
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -129,6 +150,7 @@ class DeBertaQLoRA(nn.Module):
             bnb_4bit_compute_dtype=torch.float16,
         )
         base = AutoModel.from_pretrained(base_model, quantization_config=bnb_config)
+        base = prepare_model_for_kbit_training(base)
         lora_config = LoraConfig(
             task_type=TaskType.FEATURE_EXTRACTION,
             r=lora_rank,
@@ -165,6 +187,8 @@ def build_model(model_name: str, base_model: str, num_labels: int,
         return SciBertCRF(num_labels, base_model)
     if model_name == "scibert_mlp_crf":
         return SciBertMLPCRF(num_labels, base_model)
+    if model_name == "scibert_concat4":
+        return SciBertConcat4(num_labels, base_model)
     if model_name == "deberta_qlora":
         return DeBertaQLoRA(num_labels, base_model, lora_rank, lora_alpha)
     raise ValueError(f"Unknown model: {model_name}")

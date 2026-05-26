@@ -1,0 +1,14 @@
+results/
+checkpoints/
+data/
+plots/
+
+*.pt
+*.zip
+*.tar.gz
+*.json
+!experiments.ipynb
+
+__pycache__/
+*.pyc
+.DS_Store

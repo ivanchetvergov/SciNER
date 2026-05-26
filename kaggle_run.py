@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 
 from src.config import EXPERIMENTS, ExperimentConfig
 from src.data import build_datasets, ID2LABEL, NUM_LABELS, ENTITY_TYPES
-from src.models import build_model
+from src.models import build_model, is_crf_model
 from src.train import train_model, evaluate
 from src.utils import set_seed, save_results, append_registry, append_history
 
@@ -66,13 +66,23 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
     if not cfg.use_qlora:
         model = model.to(device)
 
-    optimizer = AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=cfg.lr, weight_decay=0.01,
-    )
+    if is_crf_model(model) and cfg.crf_lr > 0:
+        crf_param_ids = {id(p) for p in model.crf.parameters()}
+        optimizer = AdamW([
+            {"params": [p for p in model.parameters() if p.requires_grad and id(p) not in crf_param_ids],
+             "lr": cfg.lr},
+            {"params": [p for p in model.crf.parameters() if p.requires_grad],
+             "lr": cfg.crf_lr},
+        ], weight_decay=0.01)
+    else:
+        optimizer = AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=cfg.lr, weight_decay=0.01,
+        )
 
     _, history = train_model(model, train_loader, dev_loader, optimizer,
-                             device, cfg.num_epochs, cfg.model_name)
+                             device, cfg.num_epochs, cfg.model_name,
+                             patience=cfg.early_stopping_patience)
 
     # save best checkpoint (train_model already loaded best state_dict back)
     ckpt_path = CHECKPOINTS_DIR / f"{cfg.model_name}.pt"
