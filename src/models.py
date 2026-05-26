@@ -133,14 +133,19 @@ class SciBertConcat4(nn.Module):
     def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased",
                  class_weights: torch.Tensor | None = None):
         super().__init__()
-        self.encoder = AutoModel.from_pretrained(base_model, output_hidden_states=True)
+        self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
         self.classifier = nn.Linear(hidden * 4, num_labels)
         self.register_buffer("class_weights", class_weights)
 
+        self._captured: list[torch.Tensor] = []
+        for layer in self.encoder.encoder.layer[-4:]:
+            layer.register_forward_hook(lambda m, inp, out: self._captured.append(out[0]))
+
     def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        last_4 = torch.cat(outputs.hidden_states[-4:], dim=-1)
+        self._captured.clear()
+        self.encoder(input_ids=input_ids, attention_mask=attention_mask)
+        last_4 = torch.cat(self._captured, dim=-1)
         logits = self.classifier(last_4)
         loss = None
         if labels is not None:
