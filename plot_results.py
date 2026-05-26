@@ -16,12 +16,18 @@ import pandas as pd
 RESULTS_DIR  = Path("results")
 PLOTS_DIR    = Path("plots")
 ENTITY_TYPES = ["Generic", "Material", "Method", "Metric", "OtherScientificTerm", "Task"]
-MODEL_ORDER  = ["bert_linear", "scibert_linear", "scibert_linear_noweight",
-                "scibert_linear_crf", "scibert_concat4", "deberta_qlora"]
+MODEL_ORDER  = [
+    "bert_linear_noweight", "bert_linear",
+    "scibert_linear", "scibert_linear_noweight",
+    "scibert_mlp",
+    "scibert_linear_crf", "scibert_concat4", "deberta_qlora",
+]
 LABELS = {
-    "bert_linear":            "BERT\nLinear",
-    "scibert_linear":         "SciBERT\nLinear",
+    "bert_linear_noweight":   "BERT\nLinear\n(no weight)",
+    "bert_linear":            "BERT\nLinear\n(weighted)",
+    "scibert_linear":         "SciBERT\nLinear\n(weighted)",
     "scibert_linear_noweight":"SciBERT\nLinear\n(no weight)",
+    "scibert_mlp":            "SciBERT\nMLP\n(no weight)",
     "scibert_linear_crf":     "SciBERT\nLinear+CRF",
     "scibert_concat4":        "SciBERT\nConcat-4",
     "deberta_qlora":          "DeBERTa\nQLoRA",

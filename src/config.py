@@ -51,6 +51,7 @@ EXPERIMENTS = [
         base_model="allenai/scibert_scivocab_cased",
         num_epochs=10,
         early_stopping_patience=3,
+        batch_size=8,
     ),
     ExperimentConfig(
         model_name="deberta_qlora",
