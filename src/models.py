@@ -195,7 +195,7 @@ def build_model(model_name: str, base_model: str, num_labels: int,
                 class_weights: torch.Tensor | None = None) -> nn.Module:
     if model_name == "bert_linear":
         return BertNER(num_labels, base_model, class_weights)
-    if model_name == "scibert_linear":
+    if model_name in ("scibert_linear", "scibert_linear_noweight"):
         return SciBertNER(num_labels, base_model, class_weights)
     if model_name == "scibert_mlp":
         return SciBertMLP(num_labels, base_model, class_weights)

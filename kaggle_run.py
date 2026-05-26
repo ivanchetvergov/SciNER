@@ -63,7 +63,7 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
     dev_loader   = DataLoader(dev_ds,   batch_size=cfg.batch_size, shuffle=False, num_workers=2, pin_memory=True)
     test_loader  = DataLoader(test_ds,  batch_size=cfg.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
-    class_weights = compute_class_weights(train_ds, NUM_LABELS)
+    class_weights = compute_class_weights(train_ds, NUM_LABELS) if cfg.use_class_weights else None
 
     model = build_model(cfg.model_name, cfg.base_model, NUM_LABELS,
                         cfg.use_qlora, cfg.lora_rank, cfg.lora_alpha,

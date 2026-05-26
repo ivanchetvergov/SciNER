@@ -16,6 +16,7 @@ class ExperimentConfig:
     lora_rank: int = 16
     lora_alpha: int = 32
     grad_accum_steps: int = 1
+    use_class_weights: bool = True
 
 
 EXPERIMENTS = [
@@ -30,6 +31,13 @@ EXPERIMENTS = [
         base_model="allenai/scibert_scivocab_cased",
         num_epochs=10,
         early_stopping_patience=3,
+    ),
+    ExperimentConfig(
+        model_name="scibert_linear_noweight",
+        base_model="allenai/scibert_scivocab_cased",
+        num_epochs=10,
+        early_stopping_patience=3,
+        use_class_weights=False,
     ),
     ExperimentConfig(
         model_name="scibert_mlp",
