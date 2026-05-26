@@ -1,43 +1,45 @@
 """
-Build comparison plots from results/registry.csv and results/history.csv.
-Skips models with macro_f1 < 0.1 (broken runs).
+Build all result plots for a given results directory.
 
 Usage:
-    python plot_results.py
-    python plot_results.py --results-dir results/v1
-    python plot_results.py --all   # include broken runs too
+    python plot_results.py                          # reads results/v1, writes plots/v1
+    python plot_results.py --results-dir results/v2
+    python plot_results.py --all                    # include macro_f1 < 0.1 runs
 """
 import argparse
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-PLOTS_DIR    = Path("plots")
 ENTITY_TYPES = ["Generic", "Material", "Method", "Metric", "OtherScientificTerm", "Task"]
 MODEL_ORDER  = [
     "bert_linear_noweight", "bert_linear",
     "roberta_linear_noweight", "roberta_linear",
     "scibert_linear_noweight", "scibert_linear",
     "scibert_mlp",
-    "scibert_linear_crf_noweight", "scibert_linear_crf", "scibert_concat4",
+    "scibert_linear_crf_noweight", "scibert_linear_crf",
+    "scibert_concat4",
 ]
 LABELS = {
-    "bert_linear_noweight":         "BERT\nLinear\n(no weight)",
-    "bert_linear":                  "BERT\nLinear\n(weighted)",
-    "roberta_linear_noweight":      "RoBERTa\nLinear\n(no weight)",
-    "roberta_linear":               "RoBERTa\nLinear\n(weighted)",
-    "scibert_linear_noweight":      "SciBERT\nLinear\n(no weight)",
-    "scibert_linear":               "SciBERT\nLinear\n(weighted)",
-    "scibert_mlp":                  "SciBERT\nMLP",
-    "scibert_linear_crf_noweight":  "SciBERT\nLinear+CRF\n(no weight)",
-    "scibert_linear_crf":           "SciBERT\nLinear+CRF\n(weighted)",
-    "scibert_concat4":              "SciBERT\nConcat-4",
+    "bert_linear_noweight":         "BERT Linear\n(no weight)",
+    "bert_linear":                  "BERT Linear\n(weighted)",
+    "roberta_linear_noweight":      "RoBERTa Linear\n(no weight)",
+    "roberta_linear":               "RoBERTa Linear\n(weighted)",
+    "scibert_linear_noweight":      "SciBERT Linear\n(no weight)",
+    "scibert_linear":               "SciBERT Linear\n(weighted)",
+    "scibert_mlp":                  "SciBERT MLP",
+    "scibert_linear_crf_noweight":  "SciBERT CRF\n(no weight)",
+    "scibert_linear_crf":           "SciBERT CRF\n(weighted)",
+    "scibert_concat4":              "SciBERT Concat-4",
 }
 
 
-def load_data(results_dir: Path, include_broken: bool):
+# ── data loading ───────────────────────────────────────────────────────────────
+
+def load_csvs(results_dir: Path, include_broken: bool):
     registry = pd.read_csv(results_dir / "registry.csv")
     history  = pd.read_csv(results_dir / "history.csv")
 
@@ -53,15 +55,68 @@ def load_data(results_dir: Path, include_broken: bool):
     return registry.set_index("model_name"), history, models
 
 
-def palette(n):
-    return [plt.cm.tab10(i / 10) for i in range(n)]
+def load_predictions(results_dir: Path, model_name: str, run_id: str):
+    pattern = f"{model_name}_{run_id}*.json"
+    candidates = sorted(results_dir.glob(pattern))
+    if not candidates:
+        return None, None
+    with open(candidates[0]) as f:
+        d = json.load(f)
+    tp = d.get("test_predictions", {})
+    return tp.get("preds"), tp.get("true")
 
+
+# ── confusion matrix helpers ───────────────────────────────────────────────────
+
+def _extract_spans(bio_seq):
+    spans = {}
+    i = 0
+    while i < len(bio_seq):
+        tag = bio_seq[i]
+        if tag.startswith("B-"):
+            etype = tag[2:]
+            j = i + 1
+            while j < len(bio_seq) and bio_seq[j] == f"I-{etype}":
+                j += 1
+            spans[(i, j - 1)] = etype
+            i = j
+        else:
+            i += 1
+    return spans
+
+
+def build_entity_confusion(all_preds, all_trues):
+    """
+    Returns (n+1) x (n+1) count matrix.
+    Rows = true type (0..n-1) + "Spurious" (n, FP row).
+    Cols = pred type (0..n-1) + "Missed"   (n, FN col).
+    """
+    n = len(ENTITY_TYPES)
+    t2i = {t: i for i, t in enumerate(ENTITY_TYPES)}
+    matrix = np.zeros((n + 1, n + 1), dtype=int)
+
+    for pred_seq, true_seq in zip(all_preds, all_trues):
+        true_spans = _extract_spans(true_seq)
+        pred_spans = _extract_spans(pred_seq)
+        all_pos    = set(true_spans) | set(pred_spans)
+
+        for pos in all_pos:
+            tt = true_spans.get(pos)
+            pt = pred_spans.get(pos)
+            ti = t2i[tt] if tt else n
+            pi = t2i[pt] if pt else n
+            matrix[ti][pi] += 1
+
+    return matrix
+
+
+# ── individual plots ───────────────────────────────────────────────────────────
 
 def plot_macro_f1(registry, models, colors, plots_dir: Path):
     vals   = [registry.loc[m, "macro_f1"] for m in models]
     labels = [LABELS.get(m, m) for m in models]
 
-    fig, ax = plt.subplots(figsize=(11, 4))
+    fig, ax = plt.subplots(figsize=(13, 4))
     bars = ax.bar(labels, vals, color=colors, edgecolor="white", linewidth=0.8, zorder=3)
     for bar, v in zip(bars, vals):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.003,
@@ -72,10 +127,7 @@ def plot_macro_f1(registry, models, colors, plots_dir: Path):
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.spines[["top", "right"]].set_visible(False)
     plt.tight_layout()
-    out = plots_dir / "macro_f1_comparison.png"
-    plt.savefig(out, dpi=150)
-    print(f"saved → {out}")
-    plt.close()
+    _save(fig, plots_dir / "macro_f1_comparison.png")
 
 
 def plot_entity_f1(registry, models, colors, plots_dir: Path):
@@ -99,10 +151,27 @@ def plot_entity_f1(registry, models, colors, plots_dir: Path):
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.spines[["top", "right"]].set_visible(False)
     plt.tight_layout()
-    out = plots_dir / "entity_f1_comparison.png"
-    plt.savefig(out, dpi=150)
-    print(f"saved → {out}")
-    plt.close()
+    _save(fig, plots_dir / "entity_f1_comparison.png")
+
+
+def plot_heatmap(registry, models, plots_dir: Path):
+    data = np.array([[registry.loc[m, f"{e}_f1"] for e in ENTITY_TYPES] for m in models])
+    row_labels = [LABELS.get(m, m).replace("\n", " ") for m in models]
+
+    fig, ax = plt.subplots(figsize=(10, 0.55 * len(models) + 1.5))
+    im = ax.imshow(data, aspect="auto", cmap="RdYlGn", vmin=0.45, vmax=0.82)
+    plt.colorbar(im, ax=ax, label="F1")
+    ax.set_xticks(range(len(ENTITY_TYPES)))
+    ax.set_xticklabels(ENTITY_TYPES, fontsize=10)
+    ax.set_yticks(range(len(models)))
+    ax.set_yticklabels(row_labels, fontsize=9)
+    for i in range(len(models)):
+        for j in range(len(ENTITY_TYPES)):
+            ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center",
+                    fontsize=8.5, color="black", fontweight="bold")
+    ax.set_title("SciERC NER — Per-Entity F1 Heatmap", fontsize=13, fontweight="bold")
+    plt.tight_layout()
+    _save(fig, plots_dir / "entity_f1_heatmap.png")
 
 
 def plot_curves(history, models, colors, plots_dir: Path):
@@ -112,77 +181,100 @@ def plot_curves(history, models, colors, plots_dir: Path):
         if df.empty:
             continue
         label = LABELS.get(model, model).replace("\n", " ")
-        axes[0].plot(df["epoch"], df["dev_macro_f1"], marker="o", markersize=4,
+        axes[0].plot(df["epoch"], df["dev_macro_f1"], marker="o", markersize=3,
                      linewidth=1.8, label=label, color=colors[i])
-        axes[1].plot(df["epoch"], df["train_loss"],   marker="o", markersize=4,
+        axes[1].plot(df["epoch"], df["train_loss"],   marker="o", markersize=3,
                      linewidth=1.8, label=label, color=colors[i])
-
     for ax, title, ylabel, loc in [
-        (axes[0], "Dev Macro F1",  "Macro F1", "lower right"),
-        (axes[1], "Train Loss",    "Loss",      "upper right"),
+        (axes[0], "Dev Macro F1", "Macro F1", "lower right"),
+        (axes[1], "Train Loss",   "Loss",      "upper right"),
     ]:
         ax.set_title(title, fontsize=12, fontweight="bold")
         ax.set_xlabel("Epoch")
         ax.set_ylabel(ylabel)
-        ax.legend(loc=loc, fontsize=8)
+        ax.legend(loc=loc, fontsize=7.5)
         ax.grid(linestyle="--", alpha=0.4)
         ax.spines[["top", "right"]].set_visible(False)
-
     plt.suptitle("SciERC NER — Learning Curves", fontsize=13, fontweight="bold", y=1.02)
     plt.tight_layout()
-    out = plots_dir / "learning_curves.png"
-    plt.savefig(out, dpi=150, bbox_inches="tight")
-    print(f"saved → {out}")
-    plt.close()
+    _save(fig, plots_dir / "learning_curves.png")
 
 
-def plot_heatmap(registry, models, plots_dir: Path):
-    data = np.array([[registry.loc[m, f"{e}_f1"] for e in ENTITY_TYPES] for m in models])
-    row_labels = [LABELS.get(m, m).replace("\n", " ") for m in models]
+def plot_confusion_matrix(matrix: np.ndarray, model_name: str, out_path: Path):
+    n = len(ENTITY_TYPES)
+    row_labels = ENTITY_TYPES + ["Spurious"]
+    col_labels = ENTITY_TYPES + ["Missed"]
 
-    fig, ax = plt.subplots(figsize=(10, 0.55 * len(models) + 1.5))
-    im = ax.imshow(data, aspect="auto", cmap="RdYlGn", vmin=0.45, vmax=0.80)
-    plt.colorbar(im, ax=ax, label="F1")
+    # row-normalize (each true type sums to 1, skip Spurious row for norm)
+    norm = matrix.astype(float).copy()
+    row_sums = norm.sum(axis=1, keepdims=True).clip(min=1)
+    norm = norm / row_sums
 
-    ax.set_xticks(range(len(ENTITY_TYPES)))
-    ax.set_xticklabels(ENTITY_TYPES, fontsize=10)
-    ax.set_yticks(range(len(models)))
+    fig, ax = plt.subplots(figsize=(8, 7))
+    im = ax.imshow(norm, cmap="Blues", vmin=0, vmax=1)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    ax.set_xticks(range(n + 1))
+    ax.set_xticklabels(col_labels, rotation=35, ha="right", fontsize=9)
+    ax.set_yticks(range(n + 1))
     ax.set_yticklabels(row_labels, fontsize=9)
+    ax.set_xlabel("Predicted", fontsize=10)
+    ax.set_ylabel("True", fontsize=10)
 
-    for i in range(len(models)):
-        for j in range(len(ENTITY_TYPES)):
-            ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center",
-                    fontsize=8, color="black")
+    for i in range(n + 1):
+        for j in range(n + 1):
+            count = matrix[i, j]
+            if count == 0:
+                continue
+            color = "white" if norm[i, j] > 0.55 else "black"
+            ax.text(j, i, str(count), ha="center", va="center",
+                    fontsize=8, color=color)
 
-    ax.set_title("SciERC NER — Per-Entity F1 Heatmap", fontsize=13, fontweight="bold")
+    label = LABELS.get(model_name, model_name).replace("\n", " ")
+    ax.set_title(f"Entity Confusion — {label}", fontsize=11, fontweight="bold")
     plt.tight_layout()
-    out = plots_dir / "entity_f1_heatmap.png"
-    plt.savefig(out, dpi=150)
-    print(f"saved → {out}")
-    plt.close()
+    _save(fig, out_path)
 
+
+def _save(fig, path: Path):
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    print(f"  saved → {path}")
+    plt.close(fig)
+
+
+# ── main ───────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--results-dir", default="results", help="path to results directory")
-    parser.add_argument("--plots-dir",   default=None,      help="output plots dir (default: plots/<results-dir-name>)")
-    parser.add_argument("--all", action="store_true", help="include broken runs (macro_f1 < 0.1)")
+    parser.add_argument("--results-dir", default="results/v1")
+    parser.add_argument("--all", action="store_true")
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
-    plots_dir   = Path(args.plots_dir) if args.plots_dir else PLOTS_DIR / results_dir.name
-    plots_dir.mkdir(parents=True, exist_ok=True)
+    plots_dir   = Path("plots") / results_dir.name
+    conf_dir    = plots_dir / "conf_mtx"
+    conf_dir.mkdir(parents=True, exist_ok=True)
 
-    registry, history, models = load_data(results_dir, include_broken=args.all)
-    print(f"Results dir : {results_dir}")
-    print(f"Plots dir   : {plots_dir}")
-    print(f"Models ({len(models)}): {models}\n")
+    registry, history, models = load_csvs(results_dir, include_broken=args.all)
+    print(f"[{results_dir.name}] {len(models)} models → {plots_dir}\n")
 
-    colors = palette(len(models))
+    colors = [plt.cm.tab10(i / 10) for i in range(len(models))]
+
+    print("summary plots")
     plot_macro_f1(registry, models, colors, plots_dir)
     plot_entity_f1(registry, models, colors, plots_dir)
-    plot_curves(history, models, colors, plots_dir)
     plot_heatmap(registry, models, plots_dir)
+    plot_curves(history, models, colors, plots_dir)
+
+    print("\nconfusion matrices")
+    for model in models:
+        run_id = registry.loc[model, "run_id"]
+        preds, trues = load_predictions(results_dir, model, run_id)
+        if preds is None:
+            print(f"  skip {model} — no predictions JSON")
+            continue
+        matrix = build_entity_confusion(preds, trues)
+        plot_confusion_matrix(matrix, model, conf_dir / f"{model}.png")
 
 
 if __name__ == "__main__":
