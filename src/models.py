@@ -1,45 +1,53 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchcrf import CRF
 from transformers import AutoModel, BitsAndBytesConfig
 
 
 class BertNER(nn.Module):
-    def __init__(self, num_labels: int, base_model: str = "bert-base-cased"):
+    def __init__(self, num_labels: int, base_model: str = "bert-base-cased",
+                 class_weights: torch.Tensor | None = None):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
         self.classifier = nn.Linear(hidden, num_labels)
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         logits = self.classifier(outputs.last_hidden_state)
         loss = None
         if labels is not None:
-            loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
+            w = self.class_weights.to(logits.device) if self.class_weights is not None else None
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1),
+                                   ignore_index=-100, weight=w)
         return loss, logits
 
 
 class SciBertNER(nn.Module):
-    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased"):
+    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased",
+                 class_weights: torch.Tensor | None = None):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
         self.classifier = nn.Linear(hidden, num_labels)
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         logits = self.classifier(outputs.last_hidden_state)
         loss = None
         if labels is not None:
-            loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
+            w = self.class_weights.to(logits.device) if self.class_weights is not None else None
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1),
+                                   ignore_index=-100, weight=w)
         return loss, logits
 
 
 class SciBertMLP(nn.Module):
-    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased"):
+    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased",
+                 class_weights: torch.Tensor | None = None):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model)
         hidden = self.encoder.config.hidden_size
@@ -48,14 +56,16 @@ class SciBertMLP(nn.Module):
             nn.GELU(),
             nn.Linear(256, num_labels),
         )
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         logits = self.mlp(outputs.last_hidden_state)
         loss = None
         if labels is not None:
-            loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
+            w = self.class_weights.to(logits.device) if self.class_weights is not None else None
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1),
+                                   ignore_index=-100, weight=w)
         return loss, logits
 
 
@@ -120,27 +130,30 @@ class SciBertMLPCRF(nn.Module):
 class SciBertConcat4(nn.Module):
     """SciBERT with last-4-hidden-layers concatenation → Linear head."""
 
-    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased"):
+    def __init__(self, num_labels: int, base_model: str = "allenai/scibert_scivocab_cased",
+                 class_weights: torch.Tensor | None = None):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(base_model, output_hidden_states=True)
         hidden = self.encoder.config.hidden_size
         self.classifier = nn.Linear(hidden * 4, num_labels)
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        # hidden_states: tuple of (num_layers+1) tensors (B, T, H); last 4 = layers 9-12
         last_4 = torch.cat(outputs.hidden_states[-4:], dim=-1)
         logits = self.classifier(last_4)
         loss = None
         if labels is not None:
-            loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
+            w = self.class_weights.to(logits.device) if self.class_weights is not None else None
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1),
+                                   ignore_index=-100, weight=w)
         return loss, logits
 
 
 class DeBertaQLoRA(nn.Module):
     def __init__(self, num_labels: int, base_model: str = "microsoft/deberta-v3-large",
-                 lora_rank: int = 16, lora_alpha: int = 32):
+                 lora_rank: int = 16, lora_alpha: int = 32,
+                 class_weights: torch.Tensor | None = None):
         super().__init__()
         from peft import get_peft_model, prepare_model_for_kbit_training, LoraConfig, TaskType
 
@@ -161,14 +174,16 @@ class DeBertaQLoRA(nn.Module):
         )
         self.encoder = get_peft_model(base, lora_config)
         self.classifier = nn.Linear(base.config.hidden_size, num_labels)
-        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        self.register_buffer("class_weights", class_weights)
 
     def forward(self, input_ids, attention_mask, labels=None):
         hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.float()
         logits = self.classifier.to(hidden.device)(hidden)
         loss = None
         if labels is not None:
-            loss = self.loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
+            w = self.class_weights.to(logits.device) if self.class_weights is not None else None
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1),
+                                   ignore_index=-100, weight=w)
         return loss, logits
 
 
@@ -176,21 +191,22 @@ _CRF_MODELS = (SciBertCRF, SciBertMLPCRF)
 
 
 def build_model(model_name: str, base_model: str, num_labels: int,
-                use_qlora: bool = False, lora_rank: int = 16, lora_alpha: int = 32) -> nn.Module:
+                use_qlora: bool = False, lora_rank: int = 16, lora_alpha: int = 32,
+                class_weights: torch.Tensor | None = None) -> nn.Module:
     if model_name == "bert_linear":
-        return BertNER(num_labels, base_model)
+        return BertNER(num_labels, base_model, class_weights)
     if model_name == "scibert_linear":
-        return SciBertNER(num_labels, base_model)
+        return SciBertNER(num_labels, base_model, class_weights)
     if model_name == "scibert_mlp":
-        return SciBertMLP(num_labels, base_model)
+        return SciBertMLP(num_labels, base_model, class_weights)
     if model_name == "scibert_crf":
         return SciBertCRF(num_labels, base_model)
     if model_name == "scibert_mlp_crf":
         return SciBertMLPCRF(num_labels, base_model)
     if model_name == "scibert_concat4":
-        return SciBertConcat4(num_labels, base_model)
+        return SciBertConcat4(num_labels, base_model, class_weights)
     if model_name == "deberta_qlora":
-        return DeBertaQLoRA(num_labels, base_model, lora_rank, lora_alpha)
+        return DeBertaQLoRA(num_labels, base_model, lora_rank, lora_alpha, class_weights)
     raise ValueError(f"Unknown model: {model_name}")
 
 

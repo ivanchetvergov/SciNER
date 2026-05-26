@@ -12,21 +12,27 @@ def _is_quantized(model) -> bool:
     return any("bitsandbytes" in type(m).__module__ for m in model.modules())
 
 
-def train_epoch(model, loader: DataLoader, optimizer, device: torch.device) -> float:
+def train_epoch(model, loader: DataLoader, optimizer, device: torch.device,
+                scheduler=None, grad_accum_steps: int = 1) -> float:
     model.train()
     total_loss = 0.0
+    optimizer.zero_grad()
 
-    for batch in loader:
+    for step, batch in enumerate(loader):
         input_ids      = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels         = batch["labels"].to(device)
 
-        optimizer.zero_grad()
         loss, _ = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
+        (loss / grad_accum_steps).backward()
         total_loss += loss.item()
+
+        if (step + 1) % grad_accum_steps == 0 or (step + 1) == len(loader):
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
+            optimizer.zero_grad()
 
     return total_loss / len(loader)
 
@@ -37,7 +43,8 @@ def evaluate(
     loader: DataLoader,
     device: torch.device,
     id2label: dict = None,
-) -> dict:
+    return_preds: bool = False,
+) -> dict | tuple:
     if id2label is None:
         id2label = ID2LABEL
 
@@ -52,9 +59,6 @@ def evaluate(
 
         if use_crf:
             tag_seqs = model.decode(input_ids, attention_mask)
-            # CRF decodes over all attention_mask=1 positions.
-            # Advance tag_idx for every non-padding position, but only record
-            # where label != -100 (first subtoken of each word).
             for tags, label_seq, mask_seq in zip(tag_seqs, labels, attention_mask):
                 pred_tags, true_tags = [], []
                 tag_idx = 0
@@ -80,7 +84,10 @@ def evaluate(
                 all_preds.append(pred_tags)
                 all_true.append(true_tags)
 
-    return compute_metrics(all_preds, all_true, ENTITY_TYPES)
+    metrics = compute_metrics(all_preds, all_true, ENTITY_TYPES)
+    if return_preds:
+        return metrics, all_preds, all_true
+    return metrics
 
 
 def train_model(
@@ -92,6 +99,8 @@ def train_model(
     num_epochs: int,
     model_name: str = "",
     patience: int = 0,
+    scheduler=None,
+    grad_accum_steps: int = 1,
 ) -> tuple[dict, list[dict]]:
     """
     Full training loop with best-checkpoint tracking by dev macro F1.
@@ -106,7 +115,7 @@ def train_model(
     history = []
 
     for epoch in range(1, num_epochs + 1):
-        avg_loss = train_epoch(model, train_loader, optimizer, device)
+        avg_loss = train_epoch(model, train_loader, optimizer, device, scheduler, grad_accum_steps)
         dev_metrics = evaluate(model, dev_loader, device)
         dev_f1 = dev_metrics["macro_f1"]
 

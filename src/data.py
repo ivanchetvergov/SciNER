@@ -135,3 +135,13 @@ def build_datasets(
     test_data  = tokenize_and_align_labels(test_sents,  tokenizer, max_length)
 
     return NERDataset(train_data), NERDataset(dev_data), NERDataset(test_data)
+
+
+def compute_class_weights(dataset: NERDataset, num_labels: int) -> torch.Tensor:
+    counts = torch.zeros(num_labels)
+    for item in dataset:
+        for l in item["labels"]:
+            if l.item() != -100:
+                counts[l.item()] += 1
+    total = counts.sum()
+    return total / (num_labels * counts.clamp(min=1))

@@ -12,14 +12,16 @@ import shutil
 import tarfile
 import urllib.request
 from datetime import datetime
+from math import ceil
 from pathlib import Path
 
 import torch
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from transformers import get_linear_schedule_with_warmup
 
 from src.config import EXPERIMENTS, ExperimentConfig
-from src.data import build_datasets, ID2LABEL, NUM_LABELS, ENTITY_TYPES
+from src.data import build_datasets, compute_class_weights, ID2LABEL, NUM_LABELS, ENTITY_TYPES
 from src.models import build_model, is_crf_model
 from src.train import train_model, evaluate
 from src.utils import set_seed, save_results, append_registry, append_history
@@ -61,8 +63,11 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
     dev_loader   = DataLoader(dev_ds,   batch_size=cfg.batch_size, shuffle=False, num_workers=2, pin_memory=True)
     test_loader  = DataLoader(test_ds,  batch_size=cfg.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
+    class_weights = compute_class_weights(train_ds, NUM_LABELS)
+
     model = build_model(cfg.model_name, cfg.base_model, NUM_LABELS,
-                        cfg.use_qlora, cfg.lora_rank, cfg.lora_alpha)
+                        cfg.use_qlora, cfg.lora_rank, cfg.lora_alpha,
+                        class_weights=class_weights)
     if not cfg.use_qlora:
         model = model.to(device)
 
@@ -80,16 +85,27 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
             lr=cfg.lr, weight_decay=0.01,
         )
 
+    steps_per_epoch = ceil(len(train_loader) / cfg.grad_accum_steps)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=steps_per_epoch,
+        num_training_steps=steps_per_epoch * cfg.num_epochs,
+    )
+
     _, history = train_model(model, train_loader, dev_loader, optimizer,
                              device, cfg.num_epochs, cfg.model_name,
-                             patience=cfg.early_stopping_patience)
+                             patience=cfg.early_stopping_patience,
+                             scheduler=scheduler,
+                             grad_accum_steps=cfg.grad_accum_steps)
 
-    # save best checkpoint (train_model already loaded best state_dict back)
     ckpt_path = CHECKPOINTS_DIR / f"{cfg.model_name}.pt"
     torch.save(model.state_dict(), ckpt_path)
     print(f"[ckpt] saved → {ckpt_path}  ({ckpt_path.stat().st_size / 1e6:.0f} MB)")
 
-    test_metrics = evaluate(model, test_loader, device, ID2LABEL)
+    test_metrics, test_preds, test_true = evaluate(
+        model, test_loader, device, ID2LABEL, return_preds=True
+    )
+
     results_file = f"{cfg.model_name}_{run_id}.json"
     result = {
         "run_id":       run_id,
@@ -98,6 +114,7 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
         "config":       cfg.__dict__,
         "history":      history,
         "test_metrics": test_metrics,
+        "test_predictions": {"preds": test_preds, "true": test_true},
         "results_file": results_file,
     }
     save_results(result, RESULTS_DIR / results_file)
@@ -167,7 +184,6 @@ def main():
     if args.models:
         experiments = [e for e in experiments if e.model_name in args.models]
 
-    # apply CLI overrides
     if args.epochs or args.batch_size:
         patched = []
         for cfg in experiments:

@@ -15,6 +15,7 @@ class ExperimentConfig:
     use_qlora: bool = False
     lora_rank: int = 16
     lora_alpha: int = 32
+    grad_accum_steps: int = 1
 
 
 EXPERIMENTS = [
@@ -65,5 +66,6 @@ EXPERIMENTS = [
         batch_size=8,
         num_epochs=10,
         early_stopping_patience=3,
+        grad_accum_steps=4,
     ),
 ]
