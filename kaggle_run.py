@@ -30,10 +30,9 @@ from src.utils import set_seed, save_results, append_registry, append_history
 
 
 # ── paths ──────────────────────────────────────────────────────────────────────
-ROOT            = Path(__file__).parent
-DATA_DIR        = ROOT / "data"
-RESULTS_DIR     = ROOT / "results"
-CHECKPOINTS_DIR = ROOT / "checkpoints"
+ROOT        = Path(__file__).parent
+DATA_DIR    = ROOT / "data"
+RESULTS_DIR = ROOT / "results"
 
 
 # ── data ───────────────────────────────────────────────────────────────────────
@@ -60,7 +59,7 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
     print(f"\n{'='*60}\n  {cfg.model_name}  |  {cfg.base_model}\n{'='*60}")
     set_seed(cfg.seed)
 
-    train_ds, dev_ds, test_ds = build_datasets(DATA_DIR, cfg.base_model, cfg.max_length, augment=cfg.augment)
+    train_ds, dev_ds, test_ds = build_datasets(DATA_DIR, cfg.base_model, cfg.max_length, augment=cfg.augment, context_window=cfg.context_window)
     dl_kwargs = dict(num_workers=4, pin_memory=True, persistent_workers=True, collate_fn=ner_collate_fn)
     train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,  **dl_kwargs)
     dev_loader   = DataLoader(dev_ds,   batch_size=cfg.batch_size, shuffle=False, **dl_kwargs)
@@ -108,11 +107,6 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
                              grad_accum_steps=cfg.grad_accum_steps,
                              scaler=scaler)
 
-    ckpt_path = CHECKPOINTS_DIR / f"{cfg.model_name}.pt"
-    state = model.module.state_dict() if isinstance(model, torch.nn.DataParallel) else model.state_dict()
-    torch.save(state, ckpt_path)
-    print(f"[ckpt] saved → {ckpt_path}  ({ckpt_path.stat().st_size / 1e6:.0f} MB)")
-
     test_metrics, test_preds, test_true = evaluate(
         model, test_loader, device, ID2LABEL,
         return_preds=True, use_amp=(scaler is not None),
@@ -159,7 +153,7 @@ def print_summary(all_results: list[dict]):
 def pack_artifacts():
     out = Path("/kaggle/working") if Path("/kaggle/working").exists() else ROOT
     archives = []
-    for name, src in [("results", RESULTS_DIR), ("checkpoints", CHECKPOINTS_DIR)]:
+    for name, src in [("results", RESULTS_DIR)]:
         if src.exists() and any(src.iterdir()):
             dest = out / name
             shutil.make_archive(str(dest), "zip", src)
@@ -182,7 +176,6 @@ def main():
     args = parser.parse_args()
 
     RESULTS_DIR.mkdir(exist_ok=True)
-    CHECKPOINTS_DIR.mkdir(exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[device] {device}")

@@ -16,6 +16,8 @@ LABEL2ID = {l: i for i, l in enumerate(LABEL_LIST)}
 ID2LABEL = {i: l for l, i in LABEL2ID.items()}
 NUM_LABELS = len(LABEL_LIST)
 
+_CTX = "__ctx__"  # sentinel label for context tokens → -100
+
 
 def load_scierc(path: str | Path) -> list[dict]:
     docs = []
@@ -57,12 +59,41 @@ def doc_to_bio_sentences(doc: dict) -> list[list[tuple[str, str]]]:
     return result
 
 
+def load_split_docs(path: str | Path) -> list[list[list[tuple[str, str]]]]:
+    """Load preserving document structure: list[doc] → list[sent] → list[(word, label)]."""
+    return [doc_to_bio_sentences(doc) for doc in load_scierc(path)]
+
+
 def load_split(path: str | Path) -> list[list[tuple[str, str]]]:
-    docs = load_scierc(path)
-    sentences = []
+    return [sent for doc in load_split_docs(path) for sent in doc]
+
+
+# ── cross-sentence context ─────────────────────────────────────────────────
+
+def build_context_sentences(
+    docs: list[list[list[tuple[str, str]]]],
+    window: int = 1,
+) -> list[list[tuple[str, str]]]:
+    """
+    For each sentence, prepend/append up to `window` neighboring sentences
+    from the same document. Neighboring tokens are labeled _CTX → -100,
+    so loss is computed only on the center sentence.
+    """
+    result = []
     for doc in docs:
-        sentences.extend(doc_to_bio_sentences(doc))
-    return sentences
+        for i, sent in enumerate(doc):
+            before = [
+                (w, _CTX)
+                for j in range(max(0, i - window), i)
+                for w, _ in doc[j]
+            ]
+            after = [
+                (w, _CTX)
+                for j in range(i + 1, min(len(doc), i + window + 1))
+                for w, _ in doc[j]
+            ]
+            result.append(before + sent + after)
+    return result
 
 
 # ── entity swap augmentation ───────────────────────────────────────────────
@@ -70,7 +101,6 @@ def load_split(path: str | Path) -> list[list[tuple[str, str]]]:
 def _extract_entity_spans(
     sent: list[tuple[str, str]],
 ) -> list[tuple[int, int, str, tuple[str, ...]]]:
-    """Returns list of (start, end_inclusive, type, words)."""
     spans = []
     i = 0
     while i < len(sent):
@@ -93,10 +123,9 @@ def augment_entity_swap(
     seed: int = 42,
 ) -> list[list[tuple[str, str]]]:
     """
-    For each sentence containing entities, create one augmented copy where
-    each entity span is replaced (with probability p) by a random entity of
-    the same type drawn from the full training pool.
-    Returns original sentences + augmented copies (dataset grows by up to 2x).
+    Returns original sentences + augmented copies (up to 2x dataset size).
+    Each entity span is replaced with probability p by a random entity of
+    the same type from the training pool.
     """
     rng = random.Random(seed)
 
@@ -149,7 +178,7 @@ def tokenize_and_align_labels(
             is_split_into_words=True,
             max_length=max_length,
             truncation=True,
-            padding=False,  # collate_fn handles dynamic padding per batch
+            padding=False,
         )
 
         word_ids = encoding.word_ids()
@@ -160,11 +189,13 @@ def tokenize_and_align_labels(
             if word_id is None:
                 aligned_labels.append(-100)
             elif word_id != prev_word_id:
-                aligned_labels.append(LABEL2ID[word_labels[word_id]])
-            else:
-                # propagate label to continuation subwords
                 label = word_labels[word_id]
-                if label.startswith("B-"):
+                aligned_labels.append(-100 if label == _CTX else LABEL2ID[label])
+            else:
+                label = word_labels[word_id]
+                if label == _CTX:
+                    aligned_labels.append(-100)
+                elif label.startswith("B-"):
                     aligned_labels.append(LABEL2ID["I-" + label[2:]])
                 else:
                     aligned_labels.append(LABEL2ID[label])
@@ -210,17 +241,30 @@ def build_datasets(
     tokenizer_name: str,
     max_length: int = 512,
     augment: bool = False,
+    context_window: int = 0,
 ) -> tuple[NERDataset, NERDataset, NERDataset]:
     data_dir = Path(data_dir)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
-    train_sents = load_split(data_dir / "train.json")
-    dev_sents   = load_split(data_dir / "dev.json")
-    test_sents  = load_split(data_dir / "test.json")
+    train_docs = load_split_docs(data_dir / "train.json")
+    dev_docs   = load_split_docs(data_dir / "dev.json")
+    test_docs  = load_split_docs(data_dir / "test.json")
+
+    if context_window > 0:
+        train_sents = build_context_sentences(train_docs, window=context_window)
+        dev_sents   = build_context_sentences(dev_docs,   window=context_window)
+        test_sents  = build_context_sentences(test_docs,  window=context_window)
+        print(f"[context] window={context_window}: {len(train_sents)} train sentences")
+    else:
+        train_sents = [s for doc in train_docs for s in doc]
+        dev_sents   = [s for doc in dev_docs   for s in doc]
+        test_sents  = [s for doc in test_docs  for s in doc]
 
     if augment:
-        train_sents = augment_entity_swap(train_sents)
-        print(f"[augment] entity swap: {len(train_sents)} train sentences")
+        flat = [s for doc in train_docs for s in doc]
+        aug_only = augment_entity_swap(flat)[len(flat):]
+        train_sents = train_sents + aug_only
+        print(f"[augment] entity swap: +{len(aug_only)} sentences → {len(train_sents)} total")
 
     train_data = tokenize_and_align_labels(train_sents, tokenizer, max_length)
     dev_data   = tokenize_and_align_labels(dev_sents,   tokenizer, max_length)

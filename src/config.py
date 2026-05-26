@@ -18,7 +18,8 @@ class ExperimentConfig:
     grad_accum_steps: int = 1
     use_class_weights: bool = True
     no_data_parallel: bool = False
-    augment: bool = False
+    augment: bool = True
+    context_window: int = 1
 
 
 EXPERIMENTS = [
@@ -90,5 +91,5 @@ EXPERIMENTS = [
         early_stopping_patience=3,
         batch_size=8,
         no_data_parallel=True,
-    )
+    ),
 ]
