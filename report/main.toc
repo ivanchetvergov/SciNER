@@ -9,29 +9,29 @@
 \contentsline {subsection}{\numberline {2.1}Энкодеры}{5}{subsection.2.1}%
 \contentsline {subsection}{\numberline {2.2}Классификационные головы}{5}{subsection.2.2}%
 \contentsline {subsection}{\numberline {2.3}Взвешивание классов}{5}{subsection.2.3}%
-\contentsline {subsection}{\numberline {2.4}Полный список моделей}{5}{subsection.2.4}%
-\contentsline {section}{\numberline {3}Препроцессинг данных}{6}{section.3}%
-\contentsline {subsection}{\numberline {3.1}Общий пайплайн (оба эксперимента)}{6}{subsection.3.1}%
-\contentsline {subsubsection}{\numberline {3.1.1}Схема разметки BIO}{6}{subsubsection.3.1.1}%
-\contentsline {subsubsection}{\numberline {3.1.2}Токенизация и выравнивание меток}{6}{subsubsection.3.1.2}%
-\contentsline {subsubsection}{\numberline {3.1.3}Динамический паддинг}{6}{subsubsection.3.1.3}%
-\contentsline {subsection}{\numberline {3.2}Эксперимент 1 --- базовый препроцессинг}{6}{subsection.3.2}%
-\contentsline {subsection}{\numberline {3.3}Эксперимент 2 --- улучшенный препроцессинг}{6}{subsection.3.3}%
-\contentsline {subsubsection}{\numberline {3.3.1}Аугментация заменой сущностей (Entity Swap)}{6}{subsubsection.3.3.1}%
-\contentsline {subsubsection}{\numberline {3.3.2}Межпредложенческий контекст}{7}{subsubsection.3.3.2}%
-\contentsline {subsection}{\numberline {3.4}Взвешивание классов}{7}{subsection.3.4}%
-\contentsline {subsection}{\numberline {3.5}Метрика оценки}{7}{subsection.3.5}%
-\contentsline {section}{\numberline {4}Условия обучения}{8}{section.4}%
-\contentsline {subsection}{\numberline {4.1}Гиперпараметры}{8}{subsection.4.1}%
-\contentsline {subsection}{\numberline {4.2}Инфраструктура}{8}{subsection.4.2}%
-\contentsline {section}{\numberline {5}Результаты}{9}{section.5}%
-\contentsline {subsection}{\numberline {5.1}Эксперимент 1 --- базовый препроцессинг}{9}{subsection.5.1}%
-\contentsline {subsubsection}{\numberline {5.1.1}Влияние предобучения: SciBERT vs BERT vs RoBERTa}{9}{subsubsection.5.1.1}%
-\contentsline {subsubsection}{\numberline {5.1.2}Взвешивание классов: noweight стабильно лучше}{9}{subsubsection.5.1.2}%
-\contentsline {subsubsection}{\numberline {5.1.3}Архитектура головы: простое работает лучше}{10}{subsubsection.5.1.3}%
-\contentsline {subsubsection}{\numberline {5.1.4}Анализ по типам сущностей}{10}{subsubsection.5.1.4}%
-\contentsline {subsubsection}{\numberline {5.1.5}Анализ матриц ошибок}{11}{subsubsection.5.1.5}%
-\contentsline {subsubsection}{\numberline {5.1.6}Кривые обучения}{11}{subsubsection.5.1.6}%
-\contentsline {subsubsection}{\numberline {5.1.7}Сравнение с опубликованными результатами}{12}{subsubsection.5.1.7}%
-\contentsline {subsection}{\numberline {5.2}Эксперимент 2 --- улучшенный препроцессинг}{12}{subsection.5.2}%
-\contentsline {section}{Заключение}{13}{section*.11}%
+\contentsline {subsection}{\numberline {2.4}Полный список экспериментов}{5}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Препроцессинг данных}{7}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Общий пайплайн (оба эксперимента)}{7}{subsection.3.1}%
+\contentsline {subsubsection}{\numberline {3.1.1}Схема разметки BIO}{7}{subsubsection.3.1.1}%
+\contentsline {subsubsection}{\numberline {3.1.2}Токенизация и выравнивание меток}{7}{subsubsection.3.1.2}%
+\contentsline {subsubsection}{\numberline {3.1.3}Динамический паддинг}{7}{subsubsection.3.1.3}%
+\contentsline {subsection}{\numberline {3.2}Эксперимент 1 --- базовый препроцессинг}{7}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Эксперимент 2 --- улучшенный препроцессинг}{7}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.1}Аугментация заменой сущностей (Entity Swap)}{7}{subsubsection.3.3.1}%
+\contentsline {subsubsection}{\numberline {3.3.2}Межпредложенческий контекст}{8}{subsubsection.3.3.2}%
+\contentsline {subsection}{\numberline {3.4}Взвешивание классов}{8}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Метрика оценки}{8}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Условия обучения}{9}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Гиперпараметры}{9}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Инфраструктура}{9}{subsection.4.2}%
+\contentsline {section}{\numberline {5}Результаты}{10}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Эксперимент 1 --- базовый препроцессинг}{10}{subsection.5.1}%
+\contentsline {subsubsection}{\numberline {5.1.1}Влияние предобучения: SciBERT vs BERT vs RoBERTa}{10}{subsubsection.5.1.1}%
+\contentsline {subsubsection}{\numberline {5.1.2}Взвешивание классов: noweight стабильно лучше}{10}{subsubsection.5.1.2}%
+\contentsline {subsubsection}{\numberline {5.1.3}Архитектура головы: простое работает лучше}{11}{subsubsection.5.1.3}%
+\contentsline {subsubsection}{\numberline {5.1.4}Анализ по типам сущностей}{11}{subsubsection.5.1.4}%
+\contentsline {subsubsection}{\numberline {5.1.5}Анализ матриц ошибок}{12}{subsubsection.5.1.5}%
+\contentsline {subsubsection}{\numberline {5.1.6}Кривые обучения}{12}{subsubsection.5.1.6}%
+\contentsline {subsubsection}{\numberline {5.1.7}Сравнение с опубликованными результатами}{13}{subsubsection.5.1.7}%
+\contentsline {subsection}{\numberline {5.2}Эксперимент 2 --- улучшенный препроцессинг}{13}{subsection.5.2}%
+\contentsline {section}{Заключение}{14}{section*.11}%
