@@ -1,0 +1,80 @@
+{
+  "run_id": "20260526_175419",
+  "model_name": "scibert_linear_crf_noweight",
+  "base_model": "allenai/scibert_scivocab_cased",
+  "config": {
+    "model_name": "scibert_linear_crf_noweight",
+    "base_model": "allenai/scibert_scivocab_cased",
+    "lr": 2e-05,
+    "crf_lr": 0.001,
+    "batch_size": 16,
+    "num_epochs": 10,
+    "early_stopping_patience": 3,
+    "max_length": 512,
+    "seed": 42,
+    "use_class_weights": false,
+    "augment": true,
+    "context_window": 1
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.8851,
+      "dev_macro_f1": 0.3304
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.2563,
+      "dev_macro_f1": 0.5466
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.1495,
+      "dev_macro_f1": 0.6038
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.0992,
+      "dev_macro_f1": 0.6094
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.065,
+      "dev_macro_f1": 0.6376
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.0466,
+      "dev_macro_f1": 0.6455
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.0345,
+      "dev_macro_f1": 0.6302
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.0284,
+      "dev_macro_f1": 0.637
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.024,
+      "dev_macro_f1": 0.6337
+    }
+  ],
+  "test_metrics": {
+    "macro_f1": 0.6499,
+    "Generic_f1": 0.7273,
+    "Material_f1": 0.6452,
+    "Method_f1": 0.7376,
+    "Metric_f1": 0.5874,
+    "OtherScientificTerm_f1": 0.5976,
+    "Task_f1": 0.6046
+  },
+  "test_predictions": {
+    "preds": [],
+    "true": []
+  },
+  "results_file": "scibert_linear_crf_noweight_20260526_175419.json"
+}

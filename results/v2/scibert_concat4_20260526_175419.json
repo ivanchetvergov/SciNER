@@ -1,0 +1,71 @@
+{
+  "run_id": "20260526_175419",
+  "model_name": "scibert_concat4",
+  "base_model": "allenai/scibert_scivocab_cased",
+  "config": {
+    "model_name": "scibert_concat4",
+    "base_model": "allenai/scibert_scivocab_cased",
+    "lr": 2e-05,
+    "crf_lr": 0.0,
+    "batch_size": 8,
+    "num_epochs": 10,
+    "early_stopping_patience": 3,
+    "max_length": 512,
+    "seed": 42,
+    "use_class_weights": false,
+    "no_data_parallel": true,
+    "augment": true,
+    "context_window": 1
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.3954,
+      "dev_macro_f1": 0.4668
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.4466,
+      "dev_macro_f1": 0.6023
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.2205,
+      "dev_macro_f1": 0.6201
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.1213,
+      "dev_macro_f1": 0.6348
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.0695,
+      "dev_macro_f1": 0.6336
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.0423,
+      "dev_macro_f1": 0.6346
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.0268,
+      "dev_macro_f1": 0.6306
+    }
+  ],
+  "test_metrics": {
+    "macro_f1": 0.6184,
+    "Generic_f1": 0.722,
+    "Material_f1": 0.6322,
+    "Method_f1": 0.7037,
+    "Metric_f1": 0.5644,
+    "OtherScientificTerm_f1": 0.5526,
+    "Task_f1": 0.5353
+  },
+  "test_predictions": {
+    "preds": [],
+    "true": []
+  },
+  "results_file": "scibert_concat4_20260526_175419.json"
+}
