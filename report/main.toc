@@ -31,7 +31,7 @@
 \contentsline {subsubsection}{\numberline {5.1.3}Архитектура головы: простое работает лучше}{11}{subsubsection.5.1.3}%
 \contentsline {subsubsection}{\numberline {5.1.4}Анализ по типам сущностей}{11}{subsubsection.5.1.4}%
 \contentsline {subsubsection}{\numberline {5.1.5}Анализ матриц ошибок}{12}{subsubsection.5.1.5}%
-\contentsline {subsubsection}{\numberline {5.1.6}Кривые обучения}{12}{subsubsection.5.1.6}%
+\contentsline {subsubsection}{\numberline {5.1.6}Кривые обучения}{13}{subsubsection.5.1.6}%
 \contentsline {subsubsection}{\numberline {5.1.7}Сравнение с опубликованными результатами}{13}{subsubsection.5.1.7}%
 \contentsline {subsection}{\numberline {5.2}Эксперимент 2 --- улучшенный препроцессинг}{13}{subsection.5.2}%
 \contentsline {section}{Заключение}{14}{section*.11}%

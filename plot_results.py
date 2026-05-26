@@ -90,22 +90,40 @@ def build_entity_confusion(all_preds, all_trues):
     Returns (n+1) x (n+1) count matrix.
     Rows = true type (0..n-1) + "Spurious" (n, FP row).
     Cols = pred type (0..n-1) + "Missed"   (n, FN col).
+
+    Matching: overlap-based. A true span and a pred span are matched if
+    they share at least one token position. Each true span is matched to
+    the overlapping pred span with the largest overlap (greedy). Unmatched
+    true spans → Missed; unmatched pred spans → Spurious.
     """
     n = len(ENTITY_TYPES)
     t2i = {t: i for i, t in enumerate(ENTITY_TYPES)}
     matrix = np.zeros((n + 1, n + 1), dtype=int)
 
     for pred_seq, true_seq in zip(all_preds, all_trues):
-        true_spans = _extract_spans(true_seq)
-        pred_spans = _extract_spans(pred_seq)
-        all_pos    = set(true_spans) | set(pred_spans)
+        true_spans = [(s, e, t) for (s, e), t in _extract_spans(true_seq).items()]
+        pred_spans = [(s, e, t) for (s, e), t in _extract_spans(pred_seq).items()]
 
-        for pos in all_pos:
-            tt = true_spans.get(pos)
-            pt = pred_spans.get(pos)
-            ti = t2i[tt] if tt else n
-            pi = t2i[pt] if pt else n
-            matrix[ti][pi] += 1
+        matched_pred = set()
+        for ts, te, ttype in true_spans:
+            true_set = set(range(ts, te + 1))
+            best, best_overlap = None, 0
+            for pi, (ps, pe, ptype) in enumerate(pred_spans):
+                if pi in matched_pred:
+                    continue
+                overlap = len(true_set & set(range(ps, pe + 1)))
+                if overlap > best_overlap:
+                    best_overlap, best = overlap, pi
+            if best is not None:
+                ps, pe, ptype = pred_spans[best]
+                matched_pred.add(best)
+                matrix[t2i[ttype]][t2i[ptype]] += 1
+            else:
+                matrix[t2i[ttype]][n] += 1  # Missed
+
+        for pi, (ps, pe, ptype) in enumerate(pred_spans):
+            if pi not in matched_pred:
+                matrix[n][t2i[ptype]] += 1  # Spurious
 
     return matrix
 
