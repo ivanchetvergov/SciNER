@@ -16,7 +16,7 @@ from math import ceil
 from pathlib import Path
 
 import torch
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
@@ -72,11 +72,11 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
                         class_weights=class_weights)
     if not cfg.use_qlora:
         model = model.to(device)
+        if hasattr(torch, "compile"):
+            model = torch.compile(model)
         if torch.cuda.device_count() > 1:
             model = torch.nn.DataParallel(model)
             print(f"[gpu] using {torch.cuda.device_count()} GPUs")
-        if hasattr(torch, "compile"):
-            model = torch.compile(model)
 
     if is_crf_model(model) and cfg.crf_lr > 0:
         crf_param_ids = {id(p) for p in model.crf.parameters()}
@@ -99,7 +99,7 @@ def run_experiment(cfg: ExperimentConfig, device: torch.device, run_id: str) -> 
         num_training_steps=steps_per_epoch * cfg.num_epochs,
     )
 
-    scaler = GradScaler() if (not cfg.use_qlora and device.type == "cuda") else None
+    scaler = GradScaler("cuda") if (not cfg.use_qlora and device.type == "cuda") else None
 
     _, history = train_model(model, train_loader, dev_loader, optimizer,
                              device, cfg.num_epochs, cfg.model_name,

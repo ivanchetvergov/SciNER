@@ -1,7 +1,7 @@
 import copy
 
 import torch
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 
 from .models import is_crf_model
@@ -26,8 +26,11 @@ def train_epoch(model, loader: DataLoader, optimizer, device: torch.device,
         attention_mask = batch["attention_mask"].to(device)
         labels         = batch["labels"].to(device)
 
-        with autocast(enabled=use_amp):
+        with autocast("cuda", enabled=use_amp):
             loss, _ = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+
+        if loss.ndim > 0:  # DataParallel returns (n_gpus,) instead of scalar
+            loss = loss.mean()
 
         if use_amp:
             scaler.scale(loss / grad_accum_steps).backward()
@@ -72,7 +75,7 @@ def evaluate(
         attention_mask = batch["attention_mask"].to(device)
         labels         = batch["labels"].to(device)
 
-        with autocast(enabled=use_amp):
+        with autocast("cuda", enabled=use_amp):
             if use_crf:
                 decode = model.module.decode if isinstance(model, torch.nn.DataParallel) else model.decode
                 tag_seqs = decode(input_ids, attention_mask)
