@@ -212,9 +212,9 @@ def main():
     for cfg in experiments:
         result = run_experiment(cfg, device, run_id)
         all_results.append(result)
+        pack_artifacts()
 
     print_summary(all_results)
-    pack_artifacts()
 
 
 if __name__ == "__main__":
