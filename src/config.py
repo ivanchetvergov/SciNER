@@ -61,15 +61,16 @@ EXPERIMENTS = [
         batch_size=8,
         no_data_parallel=True,
     ),
-    ExperimentConfig(
-        model_name="deberta_qlora",
-        base_model="microsoft/deberta-v3-large",
-        use_qlora=True,
-        lora_rank=16,
-        lora_alpha=32,
-        batch_size=8,
-        num_epochs=10,
-        early_stopping_patience=3,
-        grad_accum_steps=4,
-    ),
+    # DeBERTa-v3-large + QLoRA: excluded — takes hours on a single T4, low ROI for this study
+    # ExperimentConfig(
+    #     model_name="deberta_qlora",
+    #     base_model="microsoft/deberta-v3-large",
+    #     use_qlora=True,
+    #     lora_rank=16,
+    #     lora_alpha=32,
+    #     batch_size=8,
+    #     num_epochs=10,
+    #     early_stopping_patience=3,
+    #     grad_accum_steps=4,
+    # ),
 ]
