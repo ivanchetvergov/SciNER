@@ -2,6 +2,7 @@ results/
 checkpoints/
 data/
 plots/
+.claude/
 
 *.pt
 *.zip
