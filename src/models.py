@@ -83,22 +83,27 @@ class SciBertCRF(nn.Module):
         self.crf = CRF(num_labels, batch_first=True)
         self.register_buffer("class_weights", class_weights)
 
+    def _apply_weights(self, emissions: torch.Tensor) -> torch.Tensor:
+        if self.class_weights is not None:
+            emissions = emissions + torch.log(self.class_weights.to(emissions.device))
+        return emissions
+
     def forward(self, input_ids, attention_mask, labels=None):
         hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        emissions = self.classifier(self.dropout(hidden)).float()
-        if self.class_weights is not None:
-            emissions = emissions * self.class_weights.to(emissions.device)
+        emissions = self._apply_weights(self.classifier(self.dropout(hidden)).float())
         if labels is not None:
             safe_labels = labels.clone()
             safe_labels[safe_labels == -100] = 0
-            mask = attention_mask.bool()
+            # Exclude context-window tokens (-100) from CRF; pos-0 must stay True
+            mask = labels != -100
+            mask[:, 0] = True
             loss = -self.crf(emissions, safe_labels, mask=mask, reduction="sum") / mask.sum()
             return loss, emissions
         return None, emissions
 
     def decode(self, input_ids, attention_mask):
         hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
-        emissions = self.classifier(self.dropout(hidden)).float()
+        emissions = self._apply_weights(self.classifier(self.dropout(hidden)).float())
         return self.crf.decode(emissions, mask=attention_mask.bool())
 
 
@@ -155,44 +160,6 @@ class SciBertConcat4(nn.Module):
         self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         last_4 = torch.cat(self._captured, dim=-1)
         logits = self.classifier(self.dropout(last_4))
-        loss = None
-        if labels is not None:
-            w = self.class_weights.to(logits.device) if self.class_weights is not None else None
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1),
-                                   ignore_index=-100, weight=w)
-        return loss, logits
-
-
-class DeBertaQLoRA(nn.Module):
-    def __init__(self, num_labels: int, base_model: str = "microsoft/deberta-v3-large",
-                 lora_rank: int = 16, lora_alpha: int = 32,
-                 class_weights: torch.Tensor | None = None):
-        super().__init__()
-        from peft import get_peft_model, prepare_model_for_kbit_training, LoraConfig, TaskType
-
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-        )
-        base = AutoModel.from_pretrained(base_model, quantization_config=bnb_config)
-        base = prepare_model_for_kbit_training(base)
-        lora_config = LoraConfig(
-            task_type=TaskType.FEATURE_EXTRACTION,
-            r=lora_rank,
-            lora_alpha=lora_alpha,
-            target_modules=["query_proj", "value_proj"],
-            lora_dropout=0.1,
-            bias="none",
-        )
-        self.encoder = get_peft_model(base, lora_config)
-        self.dropout = nn.Dropout(0.1)
-        self.classifier = nn.Linear(base.config.hidden_size, num_labels)
-        self.register_buffer("class_weights", class_weights)
-
-    def forward(self, input_ids, attention_mask, labels=None):
-        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state.float()
-        logits = self.classifier.to(hidden.device)(self.dropout(hidden))
         loss = None
         if labels is not None:
             w = self.class_weights.to(logits.device) if self.class_weights is not None else None
